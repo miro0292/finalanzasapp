@@ -19,6 +19,7 @@ import {
 } from "@/lib/firebaseClient";
 import { formatCOP, currentMonthLabel } from "@/lib/format";
 import { accountLabel } from "@/components/AccountSelect";
+import { useIsDarkMode } from "@/lib/theme";
 
 export default function ResumenTab({
   accounts,
@@ -35,6 +36,7 @@ export default function ResumenTab({
   savings: SavingsRow[];
   scheduledPayments: ScheduledPayment[];
 }) {
+  const isDark = useIsDarkMode();
   const totalFixed = debts
     .filter((f) => f.active)
     .reduce((a, r) => a + Number(r.amount), 0);
@@ -96,11 +98,24 @@ export default function ResumenTab({
         <div style={{ width: "100%", height: 200 }}>
           <ResponsiveContainer>
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#DEDACD" />
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#8A8578" }} />
-              <YAxis tick={{ fontSize: 11, fill: "#8A8578" }} width={40} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={isDark ? "#34322C" : "#DEDACD"}
+              />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 12, fill: isDark ? "#A9A395" : "#8A8578" }}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: isDark ? "#A9A395" : "#8A8578" }}
+                width={40}
+              />
               <Tooltip formatter={(v: number) => formatCOP(v)} />
-              <Bar dataKey="valor" fill="#1B2A4A" radius={[3, 3, 0, 0]} />
+              <Bar
+                dataKey="valor"
+                fill={isDark ? "#F2EFE7" : "#1B2A4A"}
+                radius={[3, 3, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

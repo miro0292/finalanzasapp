@@ -22,6 +22,7 @@ import AhorrosTab from "./sections/AhorrosTab";
 import ProgramadosTab from "./sections/ProgramadosTab";
 import ChatTab from "./sections/ChatTab";
 import PaymentReminders from "./PaymentReminders";
+import ThemeToggle from "./ThemeToggle";
 
 const TABS = [
   { id: "resumen", label: "Resumen" },
@@ -83,12 +84,15 @@ export default function Dashboard({ user }: { user: User }) {
           <h1 className="font-display text-2xl text-ink">Cuaderno</h1>
           <p className="text-xs text-stone">{user.email}</p>
         </div>
-        <button
-          onClick={() => signOut(auth)}
-          className="text-xs text-stone hover:text-coral underline underline-offset-4"
-        >
-          Salir
-        </button>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <button
+            onClick={() => signOut(auth)}
+            className="text-xs text-stone hover:text-coral underline underline-offset-4"
+          >
+            Salir
+          </button>
+        </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-5">

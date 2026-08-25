@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
 import Dashboard from "./Dashboard";
+import ThemeToggle from "./ThemeToggle";
 
 export default function AuthGate() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -51,7 +52,10 @@ export default function AuthGate() {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="w-full max-w-sm">
-          <h1 className="font-display text-3xl text-ink mb-1">Cuaderno</h1>
+          <div className="flex items-start justify-between mb-1">
+            <h1 className="font-display text-3xl text-ink">Cuaderno</h1>
+            <ThemeToggle />
+          </div>
           <p className="text-stone text-sm mb-8">
             Tu control personal de gastos e ingresos.
           </p>

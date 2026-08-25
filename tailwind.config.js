@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: "class",
   content: [
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
@@ -7,17 +8,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        ink: "#1B2A4A",
-        paper: "#F7F5F0",
-        gold: "#C9A227",
-        sage: "#6B8F71",
-        coral: "#C4574B",
-        stone: "#8A8578",
-        line: "#DEDACD",
+        ink: "var(--color-ink)",
+        paper: "var(--color-paper)",
+        gold: "var(--color-gold)",
+        sage: "var(--color-sage)",
+        coral: "var(--color-coral)",
+        stone: "var(--color-stone)",
+        line: "var(--color-line)",
+        card: "var(--color-card)",
       },
       fontFamily: {
-        display: ["var(--font-fraunces)", "serif"],
-        body: ["var(--font-inter)", "sans-serif"],
+        display: ["var(--font-quicksand)", "sans-serif"],
+        body: ["var(--font-nunito)", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
       },
     },

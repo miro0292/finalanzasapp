@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --color-ink: #1B2A4A;
+  --color-paper: #F7F5F0;
+  --color-gold: #C9A227;
+  --color-sage: #6B8F71;
+  --color-coral: #C4574B;
+  --color-stone: #8A8578;
+  --color-line: #DEDACD;
+  --color-card: #FCFBF8;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-ink: #F2EFE7;
+  --color-paper: #1C1B18;
+  --color-gold: #E3BB43;
+  --color-sage: #86AC8C;
+  --color-coral: #E08376;
+  --color-stone: #A9A395;
+  --color-line: #34322C;
+  --color-card: #221F1A;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
@@ -11,13 +35,14 @@ body {
     to bottom,
     transparent,
     transparent 34px,
-    #DEDACD 35px
+    var(--color-line) 35px
   );
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .ledger-card {
-  background: #FCFBF8;
-  border: 1px solid #DEDACD;
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
 }
 
 .amount {
@@ -26,7 +51,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #C9A227;
+  outline: 2px solid var(--color-gold);
   outline-offset: 2px;
 }
 
