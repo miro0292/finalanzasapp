@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { addDoc, collection, deleteDoc, doc } from "firebase/firestore";
-import { auth, db, Account, AccountType, DebtPlan, ScheduledPayment } from "@/lib/firebaseClient";
+import {
+  auth,
+  db,
+  Account,
+  AccountType,
+  DailyExpense,
+  DebtPlan,
+  ScheduledPayment,
+} from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 import { currentBalance } from "@/lib/debtProgress";
 
@@ -17,11 +25,13 @@ export default function CuentasTab({
   items,
   debtPlans,
   scheduledPayments,
+  dailyExpenses,
   onChange,
 }: {
   items: Account[];
   debtPlans: DebtPlan[];
   scheduledPayments: ScheduledPayment[];
+  dailyExpenses: DailyExpense[];
   onChange: () => void;
 }) {
   const [name, setName] = useState("");
@@ -30,6 +40,7 @@ export default function CuentasTab({
   const [balance, setBalance] = useState("");
   const [cutoffDay, setCutoffDay] = useState("");
   const [paymentDay, setPaymentDay] = useState("");
+  const [rate, setRate] = useState("");
   const [saving, setSaving] = useState(false);
 
   const isCardOrCredit = type === "tarjeta_credito" || type === "credito";
@@ -46,6 +57,7 @@ export default function CuentasTab({
       balance: balance ? Number(balance) : 0,
       cutoff_day: isCardOrCredit && cutoffDay ? Number(cutoffDay) : null,
       payment_day: isCardOrCredit && paymentDay ? Number(paymentDay) : null,
+      interest_rate: isCardOrCredit && rate ? Number(rate) : null,
       created_at: new Date().toISOString(),
     });
     setName("");
@@ -53,6 +65,7 @@ export default function CuentasTab({
     setBalance("");
     setCutoffDay("");
     setPaymentDay("");
+    setRate("");
     setSaving(false);
     onChange();
   }
@@ -131,6 +144,14 @@ export default function CuentasTab({
               onChange={(e) => setPaymentDay(e.target.value)}
               className="border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
             />
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Tasa de interés % (opcional)"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              className="col-span-2 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+            />
           </>
         )}
         <button
@@ -152,7 +173,8 @@ export default function CuentasTab({
         {items.map((item) => {
           const linkedPlan = debtPlans.find((p) => p.account_id === item.id);
           const cupoDisponible = linkedPlan
-            ? (item.credit_limit ?? 0) - currentBalance(linkedPlan, scheduledPayments)
+            ? (item.credit_limit ?? 0) -
+              currentBalance(linkedPlan, scheduledPayments, dailyExpenses)
             : null;
 
           return (
@@ -166,6 +188,7 @@ export default function CuentasTab({
                       ? ` · corte día ${item.cutoff_day}`
                       : ""}
                     {item.payment_day ? ` · pago día ${item.payment_day}` : ""}
+                    {item.interest_rate ? ` · ${item.interest_rate}% interés` : ""}
                     {linkedPlan ? ` · cupo automático (${linkedPlan.name})` : ""}
                   </p>
                 </div>

@@ -3,10 +3,10 @@
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { auth, db, Account, DebtPlan, ScheduledPayment } from "@/lib/firebaseClient";
+import { auth, db, Account, DailyExpense, DebtPlan, ScheduledPayment } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 import { extractRows, pick } from "@/lib/excelImport";
-import { totalPagadoDebtPlan } from "@/lib/debtProgress";
+import { currentBalance, totalGastadoDebtPlan, totalPagadoDebtPlan } from "@/lib/debtProgress";
 
 const NAME_KEYS = ["nombre", "deuda", "concepto", "descripcion", "name", "creditor", "acreedor"];
 const BALANCE_KEYS = ["balance", "saldo", "monto_original", "original_balance"];
@@ -35,11 +35,13 @@ const LINKABLE_TYPES = ["tarjeta_credito", "credito"];
 export default function CreditosTab({
   items,
   scheduledPayments,
+  dailyExpenses,
   accounts,
   onChange,
 }: {
   items: DebtPlan[];
   scheduledPayments: ScheduledPayment[];
+  dailyExpenses: DailyExpense[];
   accounts: Account[];
   onChange: () => void;
 }) {
@@ -186,12 +188,14 @@ export default function CreditosTab({
   const sorted = [...items].sort((a, b) => a.order - b.order);
 
   const totalOriginal = items.reduce((a, r) => a + Number(r.original_balance), 0);
-  const totalPagadoGlobal = items.reduce(
-    (a, r) => a + Math.min(totalPagadoDebtPlan(scheduledPayments, r.name), r.original_balance),
+  const totalActual = items.reduce(
+    (a, r) => a + currentBalance(r, scheduledPayments, dailyExpenses),
     0
   );
-  const totalActual = totalOriginal - totalPagadoGlobal;
-  const progresoGlobal = totalOriginal > 0 ? (totalPagadoGlobal / totalOriginal) * 100 : 0;
+  const progresoGlobal =
+    totalOriginal > 0
+      ? Math.max(0, Math.min(100, ((totalOriginal - totalActual) / totalOriginal) * 100))
+      : 0;
 
   return (
     <div className="py-4 space-y-6">
@@ -386,21 +390,27 @@ export default function CreditosTab({
             );
           }
 
-          const pagado = Math.min(
-            totalPagadoDebtPlan(scheduledPayments, item.name),
-            item.original_balance
-          );
-          const saldoActual = item.original_balance - pagado;
+          const pagado = totalPagadoDebtPlan(scheduledPayments, item.name);
+          const gastado = totalGastadoDebtPlan(dailyExpenses, item);
+          const saldoActual = currentBalance(item, scheduledPayments, dailyExpenses);
           const progreso =
-            item.original_balance > 0 ? (pagado / item.original_balance) * 100 : 0;
+            item.original_balance > 0
+              ? ((item.original_balance - saldoActual) / item.original_balance) * 100
+              : 0;
+          const progresoBarra = Math.max(0, Math.min(100, progreso));
           const mesesRestantes =
-            item.monthly_payment > 0 ? Math.ceil(saldoActual / item.monthly_payment) : null;
+            item.monthly_payment > 0 && saldoActual > 0
+              ? Math.ceil(saldoActual / item.monthly_payment)
+              : null;
 
           let mensaje: string;
           let mensajeColor: string;
           if (saldoActual <= 0) {
             mensaje = "¡Liquidado! Ya no debes nada de esto.";
             mensajeColor = "text-sage";
+          } else if (gastado > 0 && saldoActual >= item.original_balance) {
+            mensaje = "Este periodo has gastado más de lo que has pagado.";
+            mensajeColor = "text-coral";
           } else if (progreso >= 75) {
             mensaje = `Ya casi lo logras — vas en ${progreso.toFixed(0)}%.`;
             mensajeColor = "text-sage";
@@ -444,13 +454,14 @@ export default function CreditosTab({
               </div>
               <div className="w-full h-2 bg-line rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-sage"
-                  style={{ width: `${Math.min(100, progreso)}%` }}
+                  className={`h-full ${progreso < 0 ? "bg-coral" : "bg-sage"}`}
+                  style={{ width: `${progresoBarra}%` }}
                 />
               </div>
               <p className="text-xs text-stone">
                 {formatCOP(pagado)} pagados de {formatCOP(item.original_balance)}
-                {mesesRestantes !== null && saldoActual > 0
+                {gastado > 0 ? ` · ${formatCOP(gastado)} gastados con la tarjeta` : ""}
+                {mesesRestantes !== null
                   ? ` · ~${mesesRestantes} meses restantes al ritmo actual`
                   : ""}
                 {item.interest_rate ? ` · ${item.interest_rate}% interés` : ""}

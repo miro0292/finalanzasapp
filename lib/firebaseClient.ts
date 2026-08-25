@@ -30,6 +30,7 @@ export type Account = {
   balance: number | null;
   cutoff_day: number | null;
   payment_day: number | null;
+  interest_rate: number | null;
 };
 
 export type Debt = {

@@ -135,6 +135,7 @@ export default function Dashboard({ user }: { user: User }) {
                 items={accounts}
                 debtPlans={debtPlans}
                 scheduledPayments={scheduledPayments}
+                dailyExpenses={dailyExpenses}
                 onChange={loadAll}
               />
             )}
@@ -145,6 +146,7 @@ export default function Dashboard({ user }: { user: User }) {
               <CreditosTab
                 items={debtPlans}
                 scheduledPayments={scheduledPayments}
+                dailyExpenses={dailyExpenses}
                 accounts={accounts}
                 onChange={loadAll}
               />
