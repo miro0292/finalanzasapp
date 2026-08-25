@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test-datalist.mjs)",
+      "Bash(git commit -m ' *)",
+      "Bash(node test-inactivity.mjs)",
+      "Bash(node test-inactivity2.mjs)"
+    ]
+  }
+}

@@ -23,6 +23,7 @@ import ProgramadosTab from "./sections/ProgramadosTab";
 import ChatTab from "./sections/ChatTab";
 import PaymentReminders from "./PaymentReminders";
 import ThemeToggle from "./ThemeToggle";
+import { useInactivityLogout } from "@/lib/useInactivityLogout";
 
 const TABS = [
   { id: "resumen", label: "Resumen" },
@@ -42,6 +43,7 @@ function mapDocs<T>(snap: { docs: { id: string; data: () => any }[] }): T[] {
 }
 
 export default function Dashboard({ user }: { user: User }) {
+  useInactivityLogout();
   const [tab, setTab] = useState<TabId>("resumen");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
