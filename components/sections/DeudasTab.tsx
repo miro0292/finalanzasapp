@@ -52,6 +52,15 @@ export default function DeudasTab({
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDueDay, setEditDueDay] = useState("1");
+  const [editMaxPayDay, setEditMaxPayDay] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editAccountId, setEditAccountId] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -151,6 +160,37 @@ export default function DeudasTab({
   async function toggleActive(item: Debt) {
     const uid = auth.currentUser!.uid;
     await updateDoc(doc(db, "users", uid, "debts", item.id), { active: !item.active });
+    onChange();
+  }
+
+  function startEdit(item: Debt) {
+    setEditingId(item.id);
+    setEditName(item.name);
+    setEditAmount(String(item.amount));
+    setEditDueDay(String(item.due_day));
+    setEditMaxPayDay(item.max_pay_day ? String(item.max_pay_day) : "");
+    setEditCategory(item.category);
+    setEditAccountId(item.account_id || "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editName || !editAmount) return;
+    setEditSaving(true);
+    const uid = auth.currentUser!.uid;
+    await updateDoc(doc(db, "users", uid, "debts", id), {
+      name: editName,
+      amount: Number(editAmount),
+      due_day: Number(editDueDay),
+      max_pay_day: editMaxPayDay ? Number(editMaxPayDay) : null,
+      account_id: editAccountId || null,
+      category: editCategory,
+    });
+    setEditSaving(false);
+    setEditingId(null);
     onChange();
   }
 
@@ -269,6 +309,93 @@ export default function DeudasTab({
           const vencida = item.active && item.due_day < today;
           const urgente =
             item.active && item.due_day >= today && item.due_day - today <= 3;
+
+          if (editingId === item.id) {
+            return (
+              <li
+                key={item.id}
+                className="ledger-card rounded-sm p-4 grid grid-cols-2 gap-3"
+              >
+                <input
+                  placeholder="Nombre"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  list="nombres-comunes"
+                  className="col-span-2 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Valor aproximado"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  className="border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                />
+                <input
+                  placeholder="Categoría"
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                />
+                <div>
+                  <label className="block text-xs text-stone mb-1">
+                    Día de vencimiento
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={editDueDay}
+                    onChange={(e) => setEditDueDay(e.target.value)}
+                    className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-stone mb-1">
+                    Día máximo de pago (opcional)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    placeholder="Antes de recargo"
+                    value={editMaxPayDay}
+                    onChange={(e) => setEditMaxPayDay(e.target.value)}
+                    className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-stone mb-1">
+                    ¿Con qué la pagas normalmente?
+                  </label>
+                  <AccountSelect
+                    accounts={accounts}
+                    value={editAccountId}
+                    onChange={setEditAccountId}
+                    className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                  />
+                </div>
+                <div className="col-span-2 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => saveEdit(item.id)}
+                    disabled={editSaving}
+                    className="flex-1 bg-ink text-paper py-2 rounded-sm text-sm disabled:opacity-60"
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="flex-1 border border-line py-2 rounded-sm text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </li>
+            );
+          }
+
           return (
             <li
               key={item.id}
@@ -293,6 +420,12 @@ export default function DeudasTab({
               </div>
               <div className="flex items-center gap-3">
                 <span className="amount text-sm">{formatCOP(item.amount)}</span>
+                <button
+                  onClick={() => startEdit(item)}
+                  className="text-xs text-stone hover:text-ink"
+                >
+                  Editar
+                </button>
                 <button
                   onClick={() => toggleActive(item)}
                   className="text-xs text-stone hover:text-sage"
