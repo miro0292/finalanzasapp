@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { addDoc, collection, deleteDoc, doc } from "firebase/firestore";
-import { auth, db, Account, AccountType } from "@/lib/firebaseClient";
+import { auth, db, Account, AccountType, DebtPlan, ScheduledPayment } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
+import { currentBalance } from "@/lib/debtProgress";
 
 const TYPES: { value: AccountType; label: string }[] = [
   { value: "tarjeta_credito", label: "Tarjeta de crédito" },
@@ -14,9 +15,13 @@ const TYPES: { value: AccountType; label: string }[] = [
 
 export default function CuentasTab({
   items,
+  debtPlans,
+  scheduledPayments,
   onChange,
 }: {
   items: Account[];
+  debtPlans: DebtPlan[];
+  scheduledPayments: ScheduledPayment[];
   onChange: () => void;
 }) {
   const [name, setName] = useState("");
@@ -144,35 +149,45 @@ export default function CuentasTab({
             o cuentas de ahorro.
           </li>
         )}
-        {items.map((item) => (
-          <li key={item.id} className="ledger-card rounded-sm px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">{item.name}</p>
-                <p className="text-xs text-stone">
-                  {TYPES.find((t) => t.value === item.type)?.label}
-                  {item.cutoff_day
-                    ? ` · corte día ${item.cutoff_day}`
-                    : ""}
-                  {item.payment_day ? ` · pago día ${item.payment_day}` : ""}
-                </p>
+        {items.map((item) => {
+          const linkedPlan = debtPlans.find((p) => p.account_id === item.id);
+          const cupoDisponible = linkedPlan
+            ? (item.credit_limit ?? 0) - currentBalance(linkedPlan, scheduledPayments)
+            : null;
+
+          return (
+            <li key={item.id} className="ledger-card rounded-sm px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{item.name}</p>
+                  <p className="text-xs text-stone">
+                    {TYPES.find((t) => t.value === item.type)?.label}
+                    {item.cutoff_day
+                      ? ` · corte día ${item.cutoff_day}`
+                      : ""}
+                    {item.payment_day ? ` · pago día ${item.payment_day}` : ""}
+                    {linkedPlan ? ` · cupo automático (${linkedPlan.name})` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {cupoDisponible !== null ? (
+                    <span className="amount text-sm">{formatCOP(cupoDisponible)}</span>
+                  ) : (
+                    item.balance !== null && (
+                      <span className="amount text-sm">{formatCOP(item.balance)}</span>
+                    )
+                  )}
+                  <button
+                    onClick={() => remove(item.id)}
+                    className="text-xs text-stone hover:text-coral"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                {item.balance !== null && (
-                  <span className="amount text-sm">
-                    {formatCOP(item.balance)}
-                  </span>
-                )}
-                <button
-                  onClick={() => remove(item.id)}
-                  className="text-xs text-stone hover:text-coral"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

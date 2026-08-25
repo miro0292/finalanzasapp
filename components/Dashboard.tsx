@@ -131,7 +131,12 @@ export default function Dashboard({ user }: { user: User }) {
               />
             )}
             {tab === "cuentas" && (
-              <CuentasTab items={accounts} onChange={loadAll} />
+              <CuentasTab
+                items={accounts}
+                debtPlans={debtPlans}
+                scheduledPayments={scheduledPayments}
+                onChange={loadAll}
+              />
             )}
             {tab === "deudas" && (
               <DeudasTab items={debts} accounts={accounts} onChange={loadAll} />
@@ -140,6 +145,7 @@ export default function Dashboard({ user }: { user: User }) {
               <CreditosTab
                 items={debtPlans}
                 scheduledPayments={scheduledPayments}
+                accounts={accounts}
                 onChange={loadAll}
               />
             )}

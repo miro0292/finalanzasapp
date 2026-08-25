@@ -3,9 +3,10 @@
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { auth, db, DebtPlan, ScheduledPayment } from "@/lib/firebaseClient";
+import { auth, db, Account, DebtPlan, ScheduledPayment } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 import { extractRows, pick } from "@/lib/excelImport";
+import { totalPagadoDebtPlan } from "@/lib/debtProgress";
 
 const NAME_KEYS = ["nombre", "deuda", "concepto", "descripcion", "name", "creditor", "acreedor"];
 const BALANCE_KEYS = ["balance", "saldo", "monto_original", "original_balance"];
@@ -21,12 +22,6 @@ const NOMBRES_COMUNES = [
   "Fondo de empleados",
 ];
 
-function totalPagado(scheduledPayments: ScheduledPayment[], name: string) {
-  return scheduledPayments
-    .filter((sp) => sp.status === "pagado" && sp.debt_name === name)
-    .reduce((a, r) => a + Number(r.amount), 0);
-}
-
 function parseRate(raw: any): number | null {
   if (raw === null || raw === undefined || raw === "") return null;
   const n = Number(String(raw).replace(/[^0-9.-]/g, ""));
@@ -35,19 +30,26 @@ function parseRate(raw: any): number | null {
   return Math.round(pct * 100) / 100;
 }
 
+const LINKABLE_TYPES = ["tarjeta_credito", "credito"];
+
 export default function CreditosTab({
   items,
   scheduledPayments,
+  accounts,
   onChange,
 }: {
   items: DebtPlan[];
   scheduledPayments: ScheduledPayment[];
+  accounts: Account[];
   onChange: () => void;
 }) {
+  const linkableAccounts = accounts.filter((a) => LINKABLE_TYPES.includes(a.type));
+
   const [name, setName] = useState("");
   const [originalBalance, setOriginalBalance] = useState("");
   const [monthlyPayment, setMonthlyPayment] = useState("");
   const [rate, setRate] = useState("");
+  const [linkedAccountId, setLinkedAccountId] = useState("");
   const [saving, setSaving] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -59,6 +61,7 @@ export default function CreditosTab({
   const [editBalance, setEditBalance] = useState("");
   const [editPayment, setEditPayment] = useState("");
   const [editRate, setEditRate] = useState("");
+  const [editLinkedAccountId, setEditLinkedAccountId] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   async function add(e: React.FormEvent) {
@@ -71,6 +74,7 @@ export default function CreditosTab({
       original_balance: Number(originalBalance),
       monthly_payment: Number(monthlyPayment),
       interest_rate: rate ? Number(rate) : null,
+      account_id: linkedAccountId || null,
       order: items.length + 1,
       created_at: new Date().toISOString(),
     });
@@ -78,6 +82,7 @@ export default function CreditosTab({
     setOriginalBalance("");
     setMonthlyPayment("");
     setRate("");
+    setLinkedAccountId("");
     setSaving(false);
     onChange();
   }
@@ -94,6 +99,7 @@ export default function CreditosTab({
     setEditBalance(String(item.original_balance));
     setEditPayment(String(item.monthly_payment));
     setEditRate(item.interest_rate ? String(item.interest_rate) : "");
+    setEditLinkedAccountId(item.account_id || "");
   }
 
   function cancelEdit() {
@@ -109,6 +115,7 @@ export default function CreditosTab({
       original_balance: Number(editBalance),
       monthly_payment: Number(editPayment),
       interest_rate: editRate ? Number(editRate) : null,
+      account_id: editLinkedAccountId || null,
     });
     setEditSaving(false);
     setEditingId(null);
@@ -151,6 +158,7 @@ export default function CreditosTab({
             original_balance,
             monthly_payment,
             interest_rate: parseRate(pick(keys, RATE_KEYS)),
+            account_id: null,
             order: items.length + i + 1,
             created_at: new Date().toISOString(),
           };
@@ -179,7 +187,7 @@ export default function CreditosTab({
 
   const totalOriginal = items.reduce((a, r) => a + Number(r.original_balance), 0);
   const totalPagadoGlobal = items.reduce(
-    (a, r) => a + Math.min(totalPagado(scheduledPayments, r.name), r.original_balance),
+    (a, r) => a + Math.min(totalPagadoDebtPlan(scheduledPayments, r.name), r.original_balance),
     0
   );
   const totalActual = totalOriginal - totalPagadoGlobal;
@@ -270,6 +278,23 @@ export default function CreditosTab({
           onChange={(e) => setRate(e.target.value)}
           className="col-span-2 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
         />
+        <div className="col-span-2">
+          <label className="block text-xs text-stone mb-1">
+            ¿Es la tarjeta/cupo de alguna cuenta? (opcional)
+          </label>
+          <select
+            value={linkedAccountId}
+            onChange={(e) => setLinkedAccountId(e.target.value)}
+            className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+          >
+            <option value="">Sin vincular</option>
+            {linkableAccounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="submit"
           disabled={saving}
@@ -323,6 +348,23 @@ export default function CreditosTab({
                   onChange={(e) => setEditRate(e.target.value)}
                   className="col-span-2 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
                 />
+                <div className="col-span-2">
+                  <label className="block text-xs text-stone mb-1">
+                    ¿Es la tarjeta/cupo de alguna cuenta? (opcional)
+                  </label>
+                  <select
+                    value={editLinkedAccountId}
+                    onChange={(e) => setEditLinkedAccountId(e.target.value)}
+                    className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                  >
+                    <option value="">Sin vincular</option>
+                    {linkableAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="col-span-2 flex gap-3">
                   <button
                     type="button"
@@ -345,7 +387,7 @@ export default function CreditosTab({
           }
 
           const pagado = Math.min(
-            totalPagado(scheduledPayments, item.name),
+            totalPagadoDebtPlan(scheduledPayments, item.name),
             item.original_balance
           );
           const saldoActual = item.original_balance - pagado;
@@ -370,10 +412,20 @@ export default function CreditosTab({
             mensajeColor = "text-stone";
           }
 
+          const cuentaVinculada = accounts.find((a) => a.id === item.account_id);
+
           return (
             <li key={item.id} className="ledger-card rounded-sm px-4 py-3 space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">{item.name}</p>
+                <p className="text-sm font-medium">
+                  {item.name}
+                  {cuentaVinculada && (
+                    <span className="text-xs text-stone font-normal">
+                      {" "}
+                      · vinculada a {cuentaVinculada.name}
+                    </span>
+                  )}
+                </p>
                 <div className="flex items-center gap-3">
                   <span className="amount text-sm">{formatCOP(saldoActual)}</span>
                   <button

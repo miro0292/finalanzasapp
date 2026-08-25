@@ -89,6 +89,7 @@ export type DebtPlan = {
   monthly_payment: number;
   interest_rate: number | null;
   order: number;
+  account_id: string | null;
   created_at: string;
 };
 
