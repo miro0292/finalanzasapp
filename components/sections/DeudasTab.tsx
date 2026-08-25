@@ -6,6 +6,24 @@ import { auth, db, Account, Debt } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
 
+const NOMBRES_COMUNES = [
+  "Arriendo",
+  "Administración",
+  "Internet",
+  "Celular",
+  "Luz",
+  "Agua",
+  "Gas",
+  "Acueducto",
+  "Netflix",
+  "Spotify",
+  "Gimnasio",
+  "Seguro",
+  "Crédito",
+  "Tarjeta de crédito",
+  "TV / Cable",
+];
+
 export default function DeudasTab({
   items,
   accounts,
@@ -77,9 +95,15 @@ export default function DeudasTab({
           placeholder="Nombre (Acueducto, Internet…)"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          list="nombres-comunes"
           className="col-span-2 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
           required
         />
+        <datalist id="nombres-comunes">
+          {NOMBRES_COMUNES.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
         <input
           type="number"
           step="0.01"
