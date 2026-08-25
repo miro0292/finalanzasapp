@@ -18,7 +18,7 @@ proyecto real.
 
 Cuentas que necesitas crear (todas tienen plan gratis):
 - **GitHub** (github.com) — donde vive tu código
-- **Supabase** (supabase.com) — base de datos y usuarios
+- **Firebase** (console.firebase.google.com) — base de datos y usuarios
 - **Vercel** (vercel.com) — donde queda publicada la app
 - **Anthropic Console** (console.anthropic.com) — para la clave de la IA del chat
 
@@ -64,20 +64,20 @@ Cuentas que necesitas crear (todas tienen plan gratis):
 
 ---
 
-## 3. Crear la base de datos en Supabase
+## 3. Crear el proyecto en Firebase
 
-1. Entra a https://supabase.com → **New project**.
-2. Ponle un nombre (ej. "cuaderno-gastos") y una contraseña de base de
-   datos (guárdala, no la necesitarás seguido pero es útil tenerla).
-3. Cuando el proyecto esté listo: **SQL Editor → New query**.
-4. Abre en VS Code el archivo `supabase/schema.sql`, copia todo su
-   contenido, pégalo en el editor SQL de Supabase, y dale **Run**.
-5. Ve a **Settings → API** y copia:
-   - `Project URL`
-   - `anon public` key
-6. (Opcional pero recomendado para empezar rápido) En
-   **Authentication → Settings**, desactiva "Confirm email" para no tener
-   que verificar tu correo antes de entrar la primera vez.
+1. Entra a https://console.firebase.google.com → crea o abre tu proyecto
+   (ej. "my-finanzas-app").
+2. **Build → Authentication → Get started** → pestaña **Sign-in method** →
+   habilita **Correo electrónico/contraseña**.
+3. **Build → Firestore Database → Create database** → modo producción,
+   elige la región más cercana.
+4. En Firestore, pestaña **Reglas**: abre en VS Code el archivo
+   `firestore.rules`, copia su contenido, pégalo ahí, y dale **Publicar**.
+   Esto asegura que cada usuario solo vea sus propios datos.
+5. **Project settings** (ícono de engranaje) → **Tus apps** → si no tienes
+   una app web, créala (ícono `</>`) → copia el objeto `firebaseConfig`
+   que te muestra (lo necesitas en el siguiente paso).
 
 ---
 
@@ -89,10 +89,15 @@ Cuentas que necesitas crear (todas tienen plan gratis):
    ```
    Copia .env.local.example a .env.local
    ```
-2. Abre `.env.local` y reemplaza los valores:
+2. Abre `.env.local` y reemplaza los valores con los de tu `firebaseConfig`
+   (paso 3.5) y tu clave de Anthropic:
    ```
-   NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
+   NEXT_PUBLIC_FIREBASE_API_KEY=...
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+   NEXT_PUBLIC_FIREBASE_APP_ID=...
    ANTHROPIC_API_KEY=sk-ant-tu-clave
    ```
    La clave de Anthropic la generas en https://console.anthropic.com →
@@ -147,10 +152,14 @@ https://github.com/TU-USUARIO/TU-REPO.git)
 
 1. Entra a https://vercel.com → inicia sesión con tu cuenta de GitHub.
 2. **Add New… → Project** → selecciona tu repositorio.
-3. En **Environment Variables**, agrega las mismas tres variables de tu
+3. En **Environment Variables**, agrega las mismas variables de tu
    `.env.local`:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_FIREBASE_API_KEY`
+   - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+   - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+   - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+   - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+   - `NEXT_PUBLIC_FIREBASE_APP_ID`
    - `ANTHROPIC_API_KEY`
 4. Dale **Deploy**. En 1-2 minutos tendrás tu URL pública, algo como
    `https://cuaderno-gastos.vercel.app`.
@@ -191,8 +200,8 @@ nueva versión automáticamente.** No tienes que repetir el paso 7.
 - Copia el error y pégaselo a Claude Code en VS Code: puede leer el
   mensaje, identificar la causa (casi siempre una variable de entorno mal
   puesta o un error de sintaxis) y corregirlo.
-- Verifica primero lo más común: que las tres variables de entorno estén
-  bien copiadas en Vercel (sin espacios de más, sin comillas).
+- Verifica primero lo más común: que las variables de entorno estén bien
+  copiadas en Vercel (sin espacios de más, sin comillas).
 
 ---
 
@@ -200,7 +209,7 @@ nueva versión automáticamente.** No tienes que repetir el paso 7.
 
 1. Instalar VS Code, Node, Git, Claude Code
 2. Descomprimir el proyecto y abrirlo en VS Code
-3. Crear el proyecto en Supabase y correr `supabase/schema.sql`
+3. Crear el proyecto en Firebase (Authentication + Firestore + reglas)
 4. Configurar `.env.local`
 5. Probar local con `npm run dev`
 6. Subir a GitHub

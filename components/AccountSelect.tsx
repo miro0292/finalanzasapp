@@ -1,6 +1,6 @@
 "use client";
 
-import { Account } from "@/lib/supabaseClient";
+import { Account } from "@/lib/firebaseClient";
 
 const TYPE_LABEL: Record<string, string> = {
   tarjeta_credito: "Tarjeta de crédito",

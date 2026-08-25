@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Debt } from "@/lib/supabaseClient";
+import { Debt } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 
 // Recordatorio local: se ejecuta cuando abres la app y avisa si hay pagos

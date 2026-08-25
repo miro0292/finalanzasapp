@@ -2,7 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  supabase,
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  updateDoc,
+} from "firebase/firestore";
+import {
+  auth,
+  db,
   Account,
   Debt,
   DailyExpense,
@@ -11,7 +22,7 @@ import {
   ScheduledPayment,
   ChatMessage,
   Suggestion,
-} from "@/lib/supabaseClient";
+} from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 
 type Props = {
@@ -41,12 +52,15 @@ export default function ChatTab(props: Props) {
   }, [messages]);
 
   async function loadHistory() {
-    const { data } = await supabase
-      .from("chat_messages")
-      .select("*")
-      .order("created_at", { ascending: true })
-      .limit(50);
-    setMessages((data as ChatMessage[]) || []);
+    const uid = auth.currentUser!.uid;
+    const snap = await getDocs(
+      query(
+        collection(db, "users", uid, "chatMessages"),
+        orderBy("created_at", "asc"),
+        limit(50)
+      )
+    );
+    setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage)));
     setLoadingHistory(false);
   }
 
@@ -56,16 +70,20 @@ export default function ChatTab(props: Props) {
     setInput("");
     setSending(true);
 
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const uid = auth.currentUser!.uid;
+    const col = collection(db, "users", uid, "chatMessages");
 
-    const { data: inserted } = await supabase
-      .from("chat_messages")
-      .insert({ role: "user", content: text, user_id: userId })
-      .select()
-      .single();
+    const userMsg = {
+      role: "user" as const,
+      content: text,
+      suggestion: null,
+      suggestion_status: null,
+      created_at: new Date().toISOString(),
+    };
+    const insertedRef = await addDoc(col, userMsg);
+    const inserted: ChatMessage = { id: insertedRef.id, ...userMsg };
 
-    const newMessages = [...messages, inserted as ChatMessage];
+    const newMessages = [...messages, inserted];
     setMessages(newMessages);
 
     try {
@@ -85,19 +103,16 @@ export default function ChatTab(props: Props) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      const { data: assistantRow } = await supabase
-        .from("chat_messages")
-        .insert({
-          role: "assistant",
-          content: data.text || "",
-          suggestion: data.suggestion || null,
-          suggestion_status: data.suggestion ? "pending" : null,
-          user_id: userId,
-        })
-        .select()
-        .single();
+      const assistantMsg = {
+        role: "assistant" as const,
+        content: data.text || "",
+        suggestion: data.suggestion || null,
+        suggestion_status: data.suggestion ? ("pending" as const) : null,
+        created_at: new Date().toISOString(),
+      };
+      const assistantRef = await addDoc(col, assistantMsg);
 
-      setMessages((prev) => [...prev, assistantRow as ChatMessage]);
+      setMessages((prev) => [...prev, { id: assistantRef.id, ...assistantMsg }]);
     } catch (e) {
       setMessages((prev) => [
         ...prev,
@@ -119,10 +134,10 @@ export default function ChatTab(props: Props) {
     msg: ChatMessage,
     action: "confirmed" | "dismissed"
   ) {
-    await supabase
-      .from("chat_messages")
-      .update({ suggestion_status: action })
-      .eq("id", msg.id);
+    const uid = auth.currentUser!.uid;
+    await updateDoc(doc(db, "users", uid, "chatMessages", msg.id), {
+      suggestion_status: action,
+    });
 
     if (action === "confirmed" && msg.suggestion) {
       await applySuggestion(msg.suggestion);
@@ -135,31 +150,32 @@ export default function ChatTab(props: Props) {
   }
 
   async function applySuggestion(s: Suggestion) {
+    const uid = auth.currentUser!.uid;
     const d = s.datos || {};
     if (s.tipo === "reprogramar_deuda" && d.debt_id) {
       const update: any = {};
       if (d.new_due_day) update.due_day = d.new_due_day;
       if (d.new_max_pay_day) update.max_pay_day = d.new_max_pay_day;
       if (Object.keys(update).length) {
-        await supabase.from("debts").update(update).eq("id", d.debt_id);
+        await updateDoc(doc(db, "users", uid, "debts", d.debt_id), update);
       }
     } else if (s.tipo === "crear_meta_ahorro") {
-      const { data: userData } = await supabase.auth.getUser();
-      await supabase.from("savings").insert({
+      await addDoc(collection(db, "users", uid, "savings"), {
         name: d.nombre || s.titulo,
         amount: 0,
         goal_amount: d.monto_meta || null,
         moved_on: new Date().toISOString().slice(0, 10),
-        user_id: userData.user?.id,
+        account_id: null,
+        created_at: new Date().toISOString(),
       });
     } else if (s.tipo === "mover_pago_programado" && d.scheduled_payment_id) {
       const update: any = {};
       if (d.new_due_date) update.due_date = d.new_due_date;
       if (Object.keys(update).length) {
-        await supabase
-          .from("scheduled_payments")
-          .update(update)
-          .eq("id", d.scheduled_payment_id);
+        await updateDoc(
+          doc(db, "users", uid, "scheduledPayments", d.scheduled_payment_id),
+          update
+        );
       }
     }
   }

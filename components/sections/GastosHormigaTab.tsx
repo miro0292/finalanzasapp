@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { supabase, Account, DailyExpense } from "@/lib/supabaseClient";
+import { addDoc, collection, deleteDoc, doc } from "firebase/firestore";
+import { auth, db, Account, DailyExpense } from "@/lib/firebaseClient";
 import { formatCOP, todayISO } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
 
@@ -25,14 +26,14 @@ export default function GastosHormigaTab({
     e.preventDefault();
     if (!name || !amount) return;
     setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("daily_expenses").insert({
+    const uid = auth.currentUser!.uid;
+    await addDoc(collection(db, "users", uid, "dailyExpenses"), {
       name,
       amount: Number(amount),
       category,
       spent_on: date,
       account_id: accountId || null,
-      user_id: userData.user?.id,
+      created_at: new Date().toISOString(),
     });
     setName("");
     setAmount("");
@@ -41,7 +42,8 @@ export default function GastosHormigaTab({
   }
 
   async function remove(id: string) {
-    await supabase.from("daily_expenses").delete().eq("id", id);
+    const uid = auth.currentUser!.uid;
+    await deleteDoc(doc(db, "users", uid, "dailyExpenses", id));
     onChange();
   }
 

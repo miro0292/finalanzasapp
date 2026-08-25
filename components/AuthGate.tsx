@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import type { Session } from "@supabase/supabase-js";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  type User,
+} from "firebase/auth";
+import { auth } from "@/lib/firebaseClient";
 import Dashboard from "./Dashboard";
 
 export default function AuthGate() {
-  const [session, setSession] = useState<Session | null | undefined>(
-    undefined
-  );
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,27 +19,27 @@ export default function AuthGate() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-    });
-    return () => sub.subscription.unsubscribe();
+    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
+    return () => unsubscribe();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const action =
-      mode === "login"
-        ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({ email, password });
-    const { error } = await action;
+    try {
+      if (mode === "login") {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        await createUserWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err: any) {
+      setError(traducirError(err?.code || ""));
+    }
     setLoading(false);
-    if (error) setError(traducirError(error.message));
   }
 
-  if (session === undefined) {
+  if (user === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center text-stone font-body">
         Cargando…
@@ -44,7 +47,7 @@ export default function AuthGate() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="w-full max-w-sm">
@@ -116,15 +119,16 @@ export default function AuthGate() {
     );
   }
 
-  return <Dashboard session={session} />;
+  return <Dashboard user={user} />;
 }
 
-function traducirError(msg: string) {
-  if (msg.includes("Invalid login credentials"))
+function traducirError(code: string) {
+  if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found")
     return "Correo o contraseña incorrectos.";
-  if (msg.includes("User already registered"))
+  if (code === "auth/email-already-in-use")
     return "Ese correo ya tiene una cuenta.";
-  if (msg.includes("Password should be"))
+  if (code === "auth/weak-password")
     return "La contraseña debe tener al menos 6 caracteres.";
-  return msg;
+  if (code === "auth/invalid-email") return "Correo inválido.";
+  return "Ocurrió un error. Intenta de nuevo.";
 }

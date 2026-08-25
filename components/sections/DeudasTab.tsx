@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { supabase, Account, Debt } from "@/lib/supabaseClient";
+import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { auth, db, Account, Debt } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
 
@@ -26,15 +27,16 @@ export default function DeudasTab({
     e.preventDefault();
     if (!name || !amount) return;
     setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("debts").insert({
+    const uid = auth.currentUser!.uid;
+    await addDoc(collection(db, "users", uid, "debts"), {
       name,
       amount: Number(amount),
       due_day: Number(dueDay),
       max_pay_day: maxPayDay ? Number(maxPayDay) : null,
       account_id: accountId || null,
       category,
-      user_id: userData.user?.id,
+      active: true,
+      created_at: new Date().toISOString(),
     });
     setName("");
     setAmount("");
@@ -45,12 +47,14 @@ export default function DeudasTab({
   }
 
   async function remove(id: string) {
-    await supabase.from("debts").delete().eq("id", id);
+    const uid = auth.currentUser!.uid;
+    await deleteDoc(doc(db, "users", uid, "debts", id));
     onChange();
   }
 
   async function toggleActive(item: Debt) {
-    await supabase.from("debts").update({ active: !item.active }).eq("id", item.id);
+    const uid = auth.currentUser!.uid;
+    await updateDoc(doc(db, "users", uid, "debts", item.id), { active: !item.active });
     onChange();
   }
 

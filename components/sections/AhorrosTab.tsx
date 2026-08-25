@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { supabase, Account, SavingsRow } from "@/lib/supabaseClient";
+import { addDoc, collection, deleteDoc, doc } from "firebase/firestore";
+import { auth, db, Account, SavingsRow } from "@/lib/firebaseClient";
 import { formatCOP, todayISO } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
 
@@ -25,14 +26,14 @@ export default function AhorrosTab({
     e.preventDefault();
     if (!name || !amount) return;
     setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("savings").insert({
+    const uid = auth.currentUser!.uid;
+    await addDoc(collection(db, "users", uid, "savings"), {
       name,
       amount: Number(amount),
       goal_amount: goal ? Number(goal) : null,
       moved_on: date,
       account_id: accountId || null,
-      user_id: userData.user?.id,
+      created_at: new Date().toISOString(),
     });
     setName("");
     setAmount("");
@@ -42,7 +43,8 @@ export default function AhorrosTab({
   }
 
   async function remove(id: string) {
-    await supabase.from("savings").delete().eq("id", id);
+    const uid = auth.currentUser!.uid;
+    await deleteDoc(doc(db, "users", uid, "savings", id));
     onChange();
   }
 

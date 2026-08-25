@@ -16,7 +16,7 @@ import {
   IncomeRow,
   SavingsRow,
   ScheduledPayment,
-} from "@/lib/supabaseClient";
+} from "@/lib/firebaseClient";
 import { formatCOP, currentMonthLabel } from "@/lib/format";
 import { accountLabel } from "@/components/AccountSelect";
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { supabase, Account, IncomeRow } from "@/lib/supabaseClient";
+import { addDoc, collection, deleteDoc, doc } from "firebase/firestore";
+import { auth, db, Account, IncomeRow } from "@/lib/firebaseClient";
 import { formatCOP, todayISO } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
 
@@ -26,15 +27,15 @@ export default function IngresosTab({
     e.preventDefault();
     if (!name || !amount) return;
     setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("income").insert({
+    const uid = auth.currentUser!.uid;
+    await addDoc(collection(db, "users", uid, "income"), {
       name,
       amount: Number(amount),
       kind,
       expected_day: kind === "fijo" && expectedDay ? Number(expectedDay) : null,
       received_on: date,
       account_id: accountId || null,
-      user_id: userData.user?.id,
+      created_at: new Date().toISOString(),
     });
     setName("");
     setAmount("");
@@ -44,7 +45,8 @@ export default function IngresosTab({
   }
 
   async function remove(id: string) {
-    await supabase.from("income").delete().eq("id", id);
+    const uid = auth.currentUser!.uid;
+    await deleteDoc(doc(db, "users", uid, "income", id));
     onChange();
   }
 

@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { supabase, Account, ScheduledPayment } from "@/lib/supabaseClient";
+import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { auth, db, Account, ScheduledPayment } from "@/lib/firebaseClient";
 import { formatCOP, todayISO } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
 
@@ -36,14 +37,16 @@ export default function ProgramadosTab({
     e.preventDefault();
     if (!name || !amount) return;
     setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("scheduled_payments").insert({
+    const uid = auth.currentUser!.uid;
+    await addDoc(collection(db, "users", uid, "scheduledPayments"), {
       debt_name: name,
       amount: Number(amount),
       due_date: dueDate,
       account_id: accountId || null,
+      status: "pendiente",
+      notes: null,
       source: "manual",
-      user_id: userData.user?.id,
+      created_at: new Date().toISOString(),
     });
     setName("");
     setAmount("");
@@ -62,8 +65,7 @@ export default function ProgramadosTab({
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
+      const uid = auth.currentUser!.uid;
 
       const toInsert = rows
         .map((row) => {
@@ -86,18 +88,22 @@ export default function ProgramadosTab({
             debt_name: String(debt_name),
             due_date,
             amount,
+            account_id: null,
+            status: "pendiente",
+            notes: null,
             source: "excel",
-            user_id: userId,
+            created_at: new Date().toISOString(),
           };
         })
-        .filter(Boolean);
+        .filter(Boolean) as Record<string, any>[];
 
       if (toInsert.length === 0) {
         setImportMsg(
           "No se reconocieron filas. Asegúrate de tener columnas de nombre, fecha y valor."
         );
       } else {
-        await supabase.from("scheduled_payments").insert(toInsert as any[]);
+        const col = collection(db, "users", uid, "scheduledPayments");
+        await Promise.all(toInsert.map((row) => addDoc(col, row)));
         setImportMsg(`Se importaron ${toInsert.length} pagos programados.`);
         onChange();
       }
@@ -110,15 +116,16 @@ export default function ProgramadosTab({
   }
 
   async function markPaid(item: ScheduledPayment) {
-    await supabase
-      .from("scheduled_payments")
-      .update({ status: item.status === "pagado" ? "pendiente" : "pagado" })
-      .eq("id", item.id);
+    const uid = auth.currentUser!.uid;
+    await updateDoc(doc(db, "users", uid, "scheduledPayments", item.id), {
+      status: item.status === "pagado" ? "pendiente" : "pagado",
+    });
     onChange();
   }
 
   async function remove(id: string) {
-    await supabase.from("scheduled_payments").delete().eq("id", id);
+    const uid = auth.currentUser!.uid;
+    await deleteDoc(doc(db, "users", uid, "scheduledPayments", id));
     onChange();
   }
 

@@ -6,18 +6,21 @@ fecha máxima de pago, gastos e ingresos ligados a la cuenta con la que
 pagaste, importación de pagos programados desde Excel, y un chat con IA
 que te aconseja y te propone cambios que tú confirmas con un clic.
 
-## 1. Crear la base de datos (Supabase — gratis)
+## 1. Crear el proyecto en Firebase (gratis)
 
-1. Ve a https://supabase.com → crea cuenta → **New project**.
-2. Entra a **SQL Editor** → **New query**.
-3. Pega todo el contenido de `supabase/schema.sql` y dale **Run**. Crea
-   las tablas: `accounts`, `debts`, `daily_expenses`, `income`, `savings`,
-   `scheduled_payments`, `chat_messages`, y las reglas de seguridad (cada
-   usuario solo ve sus propios datos).
-4. Ve a **Settings → API**. Copia `Project URL` y `anon public key`.
-5. En **Authentication → Settings**, si quieres entrar sin verificar
-   correo, desactiva la confirmación por email (recomendado para uso
-   personal).
+1. Ve a https://console.firebase.google.com → crea o abre tu proyecto
+   (ej. "my-finanzas-app").
+2. **Build → Authentication → Get started** → pestaña **Sign-in method**
+   → habilita el proveedor **Correo electrónico/contraseña**.
+3. **Build → Firestore Database → Create database** → modo producción,
+   elige la región más cercana.
+4. Dentro de Firestore, pestaña **Reglas**, reemplaza el contenido por el
+   de `firestore.rules` (en la raíz de este proyecto) y dale **Publicar**.
+   Esto asegura que cada usuario solo pueda leer/escribir sus propios
+   datos.
+5. **Project settings** (ícono de engranaje) → sección **Tus apps** → si no
+   tienes una app web, créala (ícono `</>`) → copia el objeto `firebaseConfig`
+   que te muestra (lo vas a necesitar en el paso siguiente).
 
 ## 2. Configurar el proyecto localmente
 
@@ -29,7 +32,7 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Llena `.env.local` con tu URL y anon key de Supabase, y tu
+Llena `.env.local` con los valores de `firebaseConfig` (paso 1.5) y tu
 `ANTHROPIC_API_KEY` (consíguela en https://console.anthropic.com).
 
 ```bash
@@ -45,7 +48,8 @@ qué pagaste?".
 
 1. Sube el proyecto a un repositorio de GitHub.
 2. En https://vercel.com → **Add New Project** → conecta el repo.
-3. Agrega las mismas tres variables de entorno de tu `.env.local`.
+3. Agrega las mismas variables de entorno de tu `.env.local` (las seis de
+   Firebase más `ANTHROPIC_API_KEY`).
 4. **Deploy**. Obtienes una URL pública tipo `https://tu-app.vercel.app`.
 
 ## 4. Instalarla en tu celular
@@ -99,8 +103,8 @@ app/                    → páginas y rutas (Next.js App Router)
 components/             → UI (login, dashboard, cada pestaña)
   sections/               → Resumen, Cuentas, Deudas, Hormiga, Ingresos,
                             Ahorros, Programados, Chat IA
-lib/                    → cliente de Supabase, tipos, formato de moneda
-supabase/schema.sql     → estructura completa de la base de datos
+lib/                    → cliente de Firebase, tipos, formato de moneda
+firestore.rules         → reglas de seguridad de Firestore
 public/manifest.json    → configuración de la PWA
 public/sw.js            → service worker (offline + push)
 ```

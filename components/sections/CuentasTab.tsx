@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { supabase, Account, AccountType } from "@/lib/supabaseClient";
+import { addDoc, collection, deleteDoc, doc } from "firebase/firestore";
+import { auth, db, Account, AccountType } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 
 const TYPES: { value: AccountType; label: string }[] = [
@@ -32,15 +33,15 @@ export default function CuentasTab({
     e.preventDefault();
     if (!name) return;
     setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    await supabase.from("accounts").insert({
+    const uid = auth.currentUser!.uid;
+    await addDoc(collection(db, "users", uid, "accounts"), {
       name,
       type,
       credit_limit: creditLimit ? Number(creditLimit) : null,
       balance: balance ? Number(balance) : 0,
       cutoff_day: isCardOrCredit && cutoffDay ? Number(cutoffDay) : null,
       payment_day: isCardOrCredit && paymentDay ? Number(paymentDay) : null,
-      user_id: userData.user?.id,
+      created_at: new Date().toISOString(),
     });
     setName("");
     setCreditLimit("");
@@ -52,7 +53,8 @@ export default function CuentasTab({
   }
 
   async function remove(id: string) {
-    await supabase.from("accounts").delete().eq("id", id);
+    const uid = auth.currentUser!.uid;
+    await deleteDoc(doc(db, "users", uid, "accounts", id));
     onChange();
   }
 

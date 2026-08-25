@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
+import { signOut, type User } from "firebase/auth";
+import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import {
-  supabase,
+  auth,
+  db,
   Account,
   Debt,
   DailyExpense,
   IncomeRow,
   SavingsRow,
   ScheduledPayment,
-} from "@/lib/supabaseClient";
+} from "@/lib/firebaseClient";
 import ResumenTab from "./sections/ResumenTab";
 import CuentasTab from "./sections/CuentasTab";
 import DeudasTab from "./sections/DeudasTab";
@@ -34,7 +36,11 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export default function Dashboard({ session }: { session: Session }) {
+function mapDocs<T>(snap: { docs: { id: string; data: () => any }[] }): T[] {
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
+}
+
+export default function Dashboard({ user }: { user: User }) {
   const [tab, setTab] = useState<TabId>("resumen");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -46,38 +52,24 @@ export default function Dashboard({ session }: { session: Session }) {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
+    const uid = user.uid;
+    const col = (name: string) => collection(db, "users", uid, name);
     const [acc, deb, d, i, s, sp] = await Promise.all([
-      supabase.from("accounts").select("*").order("created_at", { ascending: true }),
-      supabase.from("debts").select("*").order("due_day", { ascending: true }),
-      supabase
-        .from("daily_expenses")
-        .select("*")
-        .order("spent_on", { ascending: false })
-        .limit(200),
-      supabase
-        .from("income")
-        .select("*")
-        .order("received_on", { ascending: false })
-        .limit(200),
-      supabase
-        .from("savings")
-        .select("*")
-        .order("moved_on", { ascending: false })
-        .limit(200),
-      supabase
-        .from("scheduled_payments")
-        .select("*")
-        .order("due_date", { ascending: true })
-        .limit(300),
+      getDocs(query(col("accounts"), orderBy("created_at", "asc"))),
+      getDocs(query(col("debts"), orderBy("due_day", "asc"))),
+      getDocs(query(col("dailyExpenses"), orderBy("spent_on", "desc"), limit(200))),
+      getDocs(query(col("income"), orderBy("received_on", "desc"), limit(200))),
+      getDocs(query(col("savings"), orderBy("moved_on", "desc"), limit(200))),
+      getDocs(query(col("scheduledPayments"), orderBy("due_date", "asc"), limit(300))),
     ]);
-    setAccounts((acc.data as Account[]) || []);
-    setDebts((deb.data as Debt[]) || []);
-    setDailyExpenses((d.data as DailyExpense[]) || []);
-    setIncome((i.data as IncomeRow[]) || []);
-    setSavings((s.data as SavingsRow[]) || []);
-    setScheduledPayments((sp.data as ScheduledPayment[]) || []);
+    setAccounts(mapDocs<Account>(acc));
+    setDebts(mapDocs<Debt>(deb));
+    setDailyExpenses(mapDocs<DailyExpense>(d));
+    setIncome(mapDocs<IncomeRow>(i));
+    setSavings(mapDocs<SavingsRow>(s));
+    setScheduledPayments(mapDocs<ScheduledPayment>(sp));
     setLoading(false);
-  }, []);
+  }, [user.uid]);
 
   useEffect(() => {
     loadAll();
@@ -89,10 +81,10 @@ export default function Dashboard({ session }: { session: Session }) {
       <header className="flex items-center justify-between px-5 pt-6 pb-4 max-w-3xl mx-auto">
         <div>
           <h1 className="font-display text-2xl text-ink">Cuaderno</h1>
-          <p className="text-xs text-stone">{session.user.email}</p>
+          <p className="text-xs text-stone">{user.email}</p>
         </div>
         <button
-          onClick={() => supabase.auth.signOut()}
+          onClick={() => signOut(auth)}
           className="text-xs text-stone hover:text-coral underline underline-offset-4"
         >
           Salir
