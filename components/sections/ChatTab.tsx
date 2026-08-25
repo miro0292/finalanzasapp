@@ -64,8 +64,8 @@ export default function ChatTab(props: Props) {
     setLoadingHistory(false);
   }
 
-  async function send() {
-    const text = input.trim();
+  async function send(overrideText?: string) {
+    const text = (overrideText ?? input).trim();
     if (!text || sending) return;
     setInput("");
     setSending(true);
@@ -76,8 +76,7 @@ export default function ChatTab(props: Props) {
     const userMsg = {
       role: "user" as const,
       content: text,
-      suggestion: null,
-      suggestion_status: null,
+      suggestions: [] as ChatMessage["suggestions"],
       created_at: new Date().toISOString(),
     };
     const insertedRef = await addDoc(col, userMsg);
@@ -106,8 +105,7 @@ export default function ChatTab(props: Props) {
       const assistantMsg = {
         role: "assistant" as const,
         content: data.text || "",
-        suggestion: data.suggestion || null,
-        suggestion_status: data.suggestion ? ("pending" as const) : null,
+        suggestions: (data.suggestions || []) as ChatMessage["suggestions"],
         created_at: new Date().toISOString(),
       };
       const assistantRef = await addDoc(col, assistantMsg);
@@ -120,8 +118,7 @@ export default function ChatTab(props: Props) {
           id: `error-${Date.now()}`,
           role: "assistant",
           content: "No pude conectarme con el asistente. Intenta de nuevo.",
-          suggestion: null,
-          suggestion_status: null,
+          suggestions: [],
           created_at: new Date().toISOString(),
         },
       ]);
@@ -132,20 +129,28 @@ export default function ChatTab(props: Props) {
 
   async function resolveSuggestion(
     msg: ChatMessage,
+    index: number,
     action: "confirmed" | "dismissed"
   ) {
+    const target = msg.suggestions[index];
+    if (!target) return;
+
+    const updatedSuggestions = msg.suggestions.map((s, i) =>
+      i === index ? { ...s, status: action } : s
+    );
+
     const uid = auth.currentUser!.uid;
     await updateDoc(doc(db, "users", uid, "chatMessages", msg.id), {
-      suggestion_status: action,
+      suggestions: updatedSuggestions,
     });
 
-    if (action === "confirmed" && msg.suggestion) {
-      await applySuggestion(msg.suggestion);
+    if (action === "confirmed") {
+      await applySuggestion(target);
       onChange();
     }
 
     setMessages((prev) =>
-      prev.map((m) => (m.id === msg.id ? { ...m, suggestion_status: action } : m))
+      prev.map((m) => (m.id === msg.id ? { ...m, suggestions: updatedSuggestions } : m))
     );
   }
 
@@ -180,6 +185,9 @@ export default function ChatTab(props: Props) {
     }
   }
 
+  const PLAN_PROMPT =
+    "Genera un plan completo de este mes: revisa mis deudas fijas y pagos programados activos, dime el orden más eficiente para pagarlos según mis ingresos, y propón los cambios de fecha que realmente hagan falta.";
+
   return (
     <div className="py-4 flex flex-col h-[calc(100vh-220px)]">
       <div>
@@ -188,6 +196,13 @@ export default function ChatTab(props: Props) {
           Pregunta lo que quieras: si te alcanza para un antojo, cómo cuadrar
           tus pagos con tu próximo ingreso, o pídele que reprograme algo.
         </p>
+        <button
+          onClick={() => send(PLAN_PROMPT)}
+          disabled={sending}
+          className="text-xs border border-line px-3 py-1.5 rounded-sm hover:border-gold hover:text-ink disabled:opacity-60 mb-3"
+        >
+          Generar plan del mes
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-3 pr-1">
@@ -209,20 +224,23 @@ export default function ChatTab(props: Props) {
             >
               <p className="whitespace-pre-line">{m.content}</p>
             </div>
-            {m.suggestion && (
-              <div className="ledger-card rounded-sm p-3 mt-2 max-w-[85%] inline-block text-left border-l-4 border-gold">
-                <p className="text-sm font-medium">{m.suggestion.titulo}</p>
-                <p className="text-xs text-stone mt-1">{m.suggestion.detalle}</p>
-                {m.suggestion_status === "pending" || !m.suggestion_status ? (
+            {(m.suggestions || []).map((s, idx) => (
+              <div
+                key={idx}
+                className="ledger-card rounded-sm p-3 mt-2 max-w-[85%] inline-block text-left border-l-4 border-gold"
+              >
+                <p className="text-sm font-medium">{s.titulo}</p>
+                <p className="text-xs text-stone mt-1">{s.detalle}</p>
+                {s.status === "pending" ? (
                   <div className="flex gap-3 mt-2">
                     <button
-                      onClick={() => resolveSuggestion(m, "confirmed")}
+                      onClick={() => resolveSuggestion(m, idx, "confirmed")}
                       className="text-xs bg-sage text-paper px-3 py-1.5 rounded-sm"
                     >
                       Confirmar
                     </button>
                     <button
-                      onClick={() => resolveSuggestion(m, "dismissed")}
+                      onClick={() => resolveSuggestion(m, idx, "dismissed")}
                       className="text-xs text-stone hover:text-coral"
                     >
                       Descartar
@@ -230,13 +248,11 @@ export default function ChatTab(props: Props) {
                   </div>
                 ) : (
                   <p className="text-xs mt-2 text-stone">
-                    {m.suggestion_status === "confirmed"
-                      ? "✓ Confirmado y aplicado"
-                      : "Descartado"}
+                    {s.status === "confirmed" ? "✓ Confirmado y aplicado" : "Descartado"}
                   </p>
                 )}
               </div>
-            )}
+            ))}
           </div>
         ))}
         <div ref={bottomRef} />
@@ -251,7 +267,7 @@ export default function ChatTab(props: Props) {
           className="flex-1 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
         />
         <button
-          onClick={send}
+          onClick={() => send()}
           disabled={sending}
           className="bg-ink text-paper px-4 py-2 rounded-sm text-sm disabled:opacity-60"
         >

@@ -45,16 +45,18 @@ export default function ResumenTab({
   const totalSavings = savings.reduce((a, r) => a + Number(r.amount), 0);
   const balance = totalIncome - totalFixed - totalDaily - totalSavings;
 
-  const today = new Date().getDate();
-  const proximosPagos = debts
-    .filter((f) => f.active && f.due_day >= today)
-    .sort((a, b) => a.due_day - b.due_day)
-    .slice(0, 4);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const monthKey = todayStr.slice(0, 7);
+  const pagosDelMes = scheduledPayments
+    .filter((p) => p.status === "pendiente" && p.due_date.startsWith(monthKey))
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
 
-  const pendientesExcel = scheduledPayments
-    .filter((p) => p.status === "pendiente")
-    .sort((a, b) => a.due_date.localeCompare(b.due_date))
-    .slice(0, 4);
+  const SOURCE_LABEL: Record<string, string> = {
+    fija: "Deuda fija",
+    excel: "Excel",
+    ia: "IA",
+    manual: "Manual",
+  };
 
   const chartData = [
     { name: "Ingresos", valor: totalIncome },
@@ -122,46 +124,58 @@ export default function ResumenTab({
       </div>
 
       <div>
-        <p className="text-sm text-stone mb-2">Próximos pagos fijos</p>
-        {proximosPagos.length === 0 ? (
+        <p className="text-sm text-stone mb-2">Calendario de pagos del mes</p>
+        {pagosDelMes.length === 0 ? (
           <p className="text-sm text-stone">
-            No tienes pagos fijos pendientes este mes.
+            No tienes pagos pendientes este mes.
           </p>
         ) : (
-          <ul className="space-y-2">
-            {proximosPagos.map((p) => (
-              <li
-                key={p.id}
-                className="flex justify-between ledger-card rounded-sm px-4 py-3"
-              >
-                <span className="text-sm">
-                  {p.name} · día {p.due_day} · {accountLabel(accounts, p.account_id)}
-                </span>
-                <span className="amount text-sm">{formatCOP(p.amount)}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="ledger-card rounded-sm overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-stone text-left border-b border-line">
+                  <th className="px-4 py-2 font-normal">Concepto</th>
+                  <th className="px-4 py-2 font-normal">Fecha</th>
+                  <th className="px-4 py-2 font-normal">Cuenta</th>
+                  <th className="px-4 py-2 font-normal text-right">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagosDelMes.map((p) => {
+                  const diffDays =
+                    (Date.parse(p.due_date) - Date.parse(todayStr)) / 86400000;
+                  const vencido = diffDays < 0;
+                  const urgente = !vencido && diffDays <= 3;
+                  return (
+                    <tr key={p.id} className="border-b border-line last:border-0">
+                      <td className="px-4 py-2">
+                        {p.debt_name}
+                        <span className="text-xs text-stone">
+                          {" "}
+                          · {SOURCE_LABEL[p.source] || p.source}
+                        </span>
+                      </td>
+                      <td
+                        className={`px-4 py-2 ${
+                          vencido ? "text-coral" : urgente ? "text-gold" : ""
+                        }`}
+                      >
+                        {p.due_date}
+                      </td>
+                      <td className="px-4 py-2 text-stone">
+                        {accountLabel(accounts, p.account_id)}
+                      </td>
+                      <td className="px-4 py-2 text-right amount">
+                        {formatCOP(p.amount)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
-
-      {pendientesExcel.length > 0 && (
-        <div>
-          <p className="text-sm text-stone mb-2">Próximos pagos programados</p>
-          <ul className="space-y-2">
-            {pendientesExcel.map((p) => (
-              <li
-                key={p.id}
-                className="flex justify-between ledger-card rounded-sm px-4 py-3"
-              >
-                <span className="text-sm">
-                  {p.debt_name} · {p.due_date}
-                </span>
-                <span className="amount text-sm">{formatCOP(p.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }

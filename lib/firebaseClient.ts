@@ -79,7 +79,7 @@ export type ScheduledPayment = {
   account_id: string | null;
   status: "pendiente" | "pagado";
   notes: string | null;
-  source: "manual" | "excel" | "ia";
+  source: "manual" | "excel" | "ia" | "fija";
 };
 
 export type Suggestion = {
@@ -87,13 +87,13 @@ export type Suggestion = {
   titulo: string;
   detalle: string;
   datos: Record<string, any>;
+  status: "pending" | "confirmed" | "dismissed";
 };
 
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  suggestion: Suggestion | null;
-  suggestion_status: "pending" | "confirmed" | "dismissed" | null;
+  suggestions: Suggestion[];
   created_at: string;
 };

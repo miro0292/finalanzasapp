@@ -212,6 +212,7 @@ export default function ProgramadosTab({
                   {item.due_date} · {accountLabel(accounts, item.account_id)}
                   {item.source === "excel" ? " · Excel" : ""}
                   {item.source === "ia" ? " · IA" : ""}
+                  {item.source === "fija" ? " · Fija" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-3">

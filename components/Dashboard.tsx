@@ -24,6 +24,7 @@ import ChatTab from "./sections/ChatTab";
 import PaymentReminders from "./PaymentReminders";
 import ThemeToggle from "./ThemeToggle";
 import { useInactivityLogout } from "@/lib/useInactivityLogout";
+import { ensureMonthlyScheduledPayments } from "@/lib/autoSchedule";
 
 const TABS = [
   { id: "resumen", label: "Resumen" },
@@ -65,12 +66,23 @@ export default function Dashboard({ user }: { user: User }) {
       getDocs(query(col("savings"), orderBy("moved_on", "desc"), limit(200))),
       getDocs(query(col("scheduledPayments"), orderBy("due_date", "asc"), limit(300))),
     ]);
+    const debtsData = mapDocs<Debt>(deb);
+    let scheduledData = mapDocs<ScheduledPayment>(sp);
+
+    const creo = await ensureMonthlyScheduledPayments(uid, debtsData, scheduledData);
+    if (creo) {
+      const spFresh = await getDocs(
+        query(col("scheduledPayments"), orderBy("due_date", "asc"), limit(300))
+      );
+      scheduledData = mapDocs<ScheduledPayment>(spFresh);
+    }
+
     setAccounts(mapDocs<Account>(acc));
-    setDebts(mapDocs<Debt>(deb));
+    setDebts(debtsData);
     setDailyExpenses(mapDocs<DailyExpense>(d));
     setIncome(mapDocs<IncomeRow>(i));
     setSavings(mapDocs<SavingsRow>(s));
-    setScheduledPayments(mapDocs<ScheduledPayment>(sp));
+    setScheduledPayments(scheduledData);
     setLoading(false);
   }, [user.uid]);
 
