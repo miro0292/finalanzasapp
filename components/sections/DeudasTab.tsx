@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { auth, db, Account, Debt } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
+
+// El Excel puede traer columnas con estos nombres (sin importar mayúsculas):
+// nombre/deuda/concepto/creditor/acreedor, valor/monto/cuota/payment/pago
+const NAME_KEYS = ["nombre", "deuda", "concepto", "descripcion", "name", "creditor", "acreedor"];
+const AMOUNT_KEYS = ["valor", "monto", "amount", "cuota", "payment", "pago"];
+const DUE_DAY_KEYS = ["dia", "día", "dia_vencimiento", "due_day", "vencimiento"];
 
 const NOMBRES_COMUNES = [
   "Arriendo",
@@ -40,6 +47,78 @@ export default function DeudasTab({
   const [category, setCategory] = useState("servicios");
   const [accountId, setAccountId] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportMsg("");
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const uid = auth.currentUser!.uid;
+      let sinDia = 0;
+
+      const toInsert = rows
+        .map((row) => {
+          const keys = Object.keys(row).reduce((acc, k) => {
+            acc[k.toLowerCase().trim()] = row[k];
+            return acc;
+          }, {} as Record<string, any>);
+
+          const rawName = pick(keys, NAME_KEYS);
+          const rawAmount = pick(keys, AMOUNT_KEYS);
+          if (!rawName || !rawAmount) return null;
+
+          const amount = Number(String(rawAmount).replace(/[^0-9.-]/g, ""));
+          if (!amount) return null;
+
+          const rawDueDay = pick(keys, DUE_DAY_KEYS);
+          const due_day = rawDueDay ? Number(String(rawDueDay).replace(/[^0-9]/g, "")) : 1;
+          if (!rawDueDay) sinDia++;
+
+          return {
+            name: String(rawName),
+            amount,
+            due_day: due_day >= 1 && due_day <= 31 ? due_day : 1,
+            max_pay_day: null,
+            account_id: null,
+            category: "servicios",
+            active: true,
+            created_at: new Date().toISOString(),
+          };
+        })
+        .filter(Boolean) as Record<string, any>[];
+
+      if (toInsert.length === 0) {
+        setImportMsg(
+          "No se reconocieron filas. Asegúrate de tener columnas de nombre y valor."
+        );
+      } else {
+        const col = collection(db, "users", uid, "debts");
+        await Promise.all(toInsert.map((row) => addDoc(col, row)));
+        setImportMsg(
+          `Se importaron ${toInsert.length} deudas fijas.` +
+            (sinDia
+              ? ` ${sinDia} quedaron con día de vencimiento 1 por defecto — ajústalo en cada una.`
+              : "")
+        );
+        onChange();
+      }
+    } catch (err) {
+      setImportMsg("No se pudo leer el archivo. Verifica que sea un Excel válido.");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -85,6 +164,22 @@ export default function DeudasTab({
         <p className="text-sm text-stone">
           Acueducto, luz, internet, arriendo, tarjetas… lo que pagas cada mes.
         </p>
+      </div>
+
+      <div className="ledger-card rounded-sm p-4">
+        <label className="block text-xs text-stone mb-2">
+          Importar desde Excel (columnas: nombre o creditor, valor o payment)
+        </label>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          onChange={handleFile}
+          disabled={importing}
+          className="text-sm"
+        />
+        {importing && <p className="text-xs text-stone mt-2">Leyendo archivo…</p>}
+        {importMsg && <p className="text-xs text-stone mt-2">{importMsg}</p>}
       </div>
 
       <form
@@ -218,4 +313,11 @@ export default function DeudasTab({
       </ul>
     </div>
   );
+}
+
+function pick(row: Record<string, any>, keys: string[]) {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== "") return row[k];
+  }
+  return null;
 }
