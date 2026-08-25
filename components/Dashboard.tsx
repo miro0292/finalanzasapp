@@ -8,6 +8,7 @@ import {
   db,
   Account,
   Debt,
+  DebtPlan,
   DailyExpense,
   IncomeRow,
   SavingsRow,
@@ -16,6 +17,7 @@ import {
 import ResumenTab from "./sections/ResumenTab";
 import CuentasTab from "./sections/CuentasTab";
 import DeudasTab from "./sections/DeudasTab";
+import CreditosTab from "./sections/CreditosTab";
 import GastosHormigaTab from "./sections/GastosHormigaTab";
 import IngresosTab from "./sections/IngresosTab";
 import AhorrosTab from "./sections/AhorrosTab";
@@ -30,6 +32,7 @@ const TABS = [
   { id: "resumen", label: "Resumen" },
   { id: "cuentas", label: "Cuentas" },
   { id: "deudas", label: "Deudas fijas" },
+  { id: "creditos", label: "Créditos" },
   { id: "hormiga", label: "Gastos hormiga" },
   { id: "ingresos", label: "Ingresos" },
   { id: "ahorros", label: "Ahorros" },
@@ -52,19 +55,21 @@ export default function Dashboard({ user }: { user: User }) {
   const [income, setIncome] = useState<IncomeRow[]>([]);
   const [savings, setSavings] = useState<SavingsRow[]>([]);
   const [scheduledPayments, setScheduledPayments] = useState<ScheduledPayment[]>([]);
+  const [debtPlans, setDebtPlans] = useState<DebtPlan[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     const uid = user.uid;
     const col = (name: string) => collection(db, "users", uid, name);
-    const [acc, deb, d, i, s, sp] = await Promise.all([
+    const [acc, deb, d, i, s, sp, dp] = await Promise.all([
       getDocs(query(col("accounts"), orderBy("created_at", "asc"))),
       getDocs(query(col("debts"), orderBy("due_day", "asc"))),
       getDocs(query(col("dailyExpenses"), orderBy("spent_on", "desc"), limit(200))),
       getDocs(query(col("income"), orderBy("received_on", "desc"), limit(200))),
       getDocs(query(col("savings"), orderBy("moved_on", "desc"), limit(200))),
       getDocs(query(col("scheduledPayments"), orderBy("due_date", "asc"), limit(300))),
+      getDocs(query(col("debtPlans"), orderBy("order", "asc"))),
     ]);
     const debtsData = mapDocs<Debt>(deb);
     let scheduledData = mapDocs<ScheduledPayment>(sp);
@@ -83,6 +88,7 @@ export default function Dashboard({ user }: { user: User }) {
     setIncome(mapDocs<IncomeRow>(i));
     setSavings(mapDocs<SavingsRow>(s));
     setScheduledPayments(scheduledData);
+    setDebtPlans(mapDocs<DebtPlan>(dp));
     setLoading(false);
   }, [user.uid]);
 
@@ -129,6 +135,13 @@ export default function Dashboard({ user }: { user: User }) {
             )}
             {tab === "deudas" && (
               <DeudasTab items={debts} accounts={accounts} onChange={loadAll} />
+            )}
+            {tab === "creditos" && (
+              <CreditosTab
+                items={debtPlans}
+                scheduledPayments={scheduledPayments}
+                onChange={loadAll}
+              />
             )}
             {tab === "hormiga" && (
               <GastosHormigaTab

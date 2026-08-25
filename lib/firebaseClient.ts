@@ -82,6 +82,16 @@ export type ScheduledPayment = {
   source: "manual" | "excel" | "ia" | "fija";
 };
 
+export type DebtPlan = {
+  id: string;
+  name: string;
+  original_balance: number;
+  monthly_payment: number;
+  interest_rate: number | null;
+  order: number;
+  created_at: string;
+};
+
 export type Suggestion = {
   tipo: "reprogramar_deuda" | "crear_meta_ahorro" | "mover_pago_programado";
   titulo: string;

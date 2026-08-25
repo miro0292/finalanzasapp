@@ -6,6 +6,7 @@ import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestor
 import { auth, db, Account, ScheduledPayment } from "@/lib/firebaseClient";
 import { formatCOP, todayISO } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
+import { extractRows, pick } from "@/lib/excelImport";
 
 // El Excel puede traer columnas con estos nombres (sin importar mayúsculas):
 // nombre/deuda/concepto, fecha/vencimiento, valor/monto/amount
@@ -62,7 +63,7 @@ export default function ProgramadosTab({
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array", cellDates: true });
-      const rows: any[] = extractRows(wb);
+      const rows: any[] = extractRows(wb, NAME_KEYS, AMOUNT_KEYS);
 
       const uid = auth.currentUser!.uid;
 
@@ -264,57 +265,6 @@ export default function ProgramadosTab({
       )}
     </div>
   );
-}
-
-function pick(row: Record<string, any>, keys: string[]) {
-  for (const k of keys) {
-    if (row[k] !== undefined && row[k] !== "") return row[k];
-  }
-  return null;
-}
-
-// Plantillas con título/instrucciones arriba de la tabla real hacen que la
-// fila de encabezados no siempre sea la primera. Busca, en cada hoja del
-// archivo, la primera fila que contenga al menos un encabezado de nombre y
-// uno de valor reconocibles.
-function extractRows(wb: XLSX.WorkBook): Record<string, any>[] {
-  const HEADER_KEYS = [...NAME_KEYS, ...AMOUNT_KEYS];
-
-  for (const sheetName of wb.SheetNames) {
-    const sheet = wb.Sheets[sheetName];
-    const raw: any[][] = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      defval: "",
-      blankrows: false,
-    });
-
-    let headerRowIndex = -1;
-    for (let i = 0; i < Math.min(raw.length, 30); i++) {
-      const cells = raw[i].map((c) => String(c).toLowerCase().trim());
-      const hasName = cells.some((c) => NAME_KEYS.includes(c));
-      const hasAmount = cells.some((c) => AMOUNT_KEYS.includes(c));
-      if (hasName && hasAmount) {
-        headerRowIndex = i;
-        break;
-      }
-    }
-    if (headerRowIndex === -1) continue;
-
-    const headers = raw[headerRowIndex].map((h) => String(h).toLowerCase().trim());
-    const dataRows = raw.slice(headerRowIndex + 1);
-    const rows = dataRows
-      .map((r) => {
-        const obj: Record<string, any> = {};
-        headers.forEach((h, idx) => {
-          if (h) obj[h] = r[idx];
-        });
-        return obj;
-      })
-      .filter((obj) => HEADER_KEYS.some((k) => obj[k] !== undefined && obj[k] !== ""));
-
-    if (rows.length) return rows;
-  }
-  return [];
 }
 
 function toISODate(value: any): string | null {
