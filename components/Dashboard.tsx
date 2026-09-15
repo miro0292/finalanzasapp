@@ -72,9 +72,15 @@ export default function Dashboard({ user }: { user: User }) {
       getDocs(query(col("debtPlans"), orderBy("order", "asc"))),
     ]);
     const debtsData = mapDocs<Debt>(deb);
+    const debtPlansData = mapDocs<DebtPlan>(dp);
     let scheduledData = mapDocs<ScheduledPayment>(sp);
 
-    const creo = await ensureMonthlyScheduledPayments(uid, debtsData, scheduledData);
+    const creo = await ensureMonthlyScheduledPayments(
+      uid,
+      debtsData,
+      debtPlansData,
+      scheduledData
+    );
     if (creo) {
       const spFresh = await getDocs(
         query(col("scheduledPayments"), orderBy("due_date", "asc"), limit(300))
@@ -88,7 +94,7 @@ export default function Dashboard({ user }: { user: User }) {
     setIncome(mapDocs<IncomeRow>(i));
     setSavings(mapDocs<SavingsRow>(s));
     setScheduledPayments(scheduledData);
-    setDebtPlans(mapDocs<DebtPlan>(dp));
+    setDebtPlans(debtPlansData);
     setLoading(false);
   }, [user.uid]);
 
@@ -175,6 +181,7 @@ export default function Dashboard({ user }: { user: User }) {
               <ChatTab
                 accounts={accounts}
                 debts={debts}
+                debtPlans={debtPlans}
                 dailyExpenses={dailyExpenses}
                 income={income}
                 savings={savings}

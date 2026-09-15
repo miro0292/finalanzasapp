@@ -214,6 +214,7 @@ export default function ProgramadosTab({
                   {item.source === "excel" ? " · Excel" : ""}
                   {item.source === "ia" ? " · IA" : ""}
                   {item.source === "fija" ? " · Fija" : ""}
+                  {item.source === "credito" ? " · Crédito" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-3">

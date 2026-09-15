@@ -53,6 +53,7 @@ export default function ResumenTab({
 
   const SOURCE_LABEL: Record<string, string> = {
     fija: "Deuda fija",
+    credito: "Crédito",
     excel: "Excel",
     ia: "IA",
     manual: "Manual",

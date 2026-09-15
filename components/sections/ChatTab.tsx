@@ -16,6 +16,7 @@ import {
   db,
   Account,
   Debt,
+  DebtPlan,
   DailyExpense,
   IncomeRow,
   SavingsRow,
@@ -24,10 +25,12 @@ import {
   Suggestion,
 } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
+import { currentBalance } from "@/lib/debtProgress";
 
 type Props = {
   accounts: Account[];
   debts: Debt[];
+  debtPlans: DebtPlan[];
   dailyExpenses: DailyExpense[];
   income: IncomeRow[];
   savings: SavingsRow[];
@@ -36,7 +39,16 @@ type Props = {
 };
 
 export default function ChatTab(props: Props) {
-  const { accounts, debts, dailyExpenses, income, savings, scheduledPayments, onChange } = props;
+  const {
+    accounts,
+    debts,
+    debtPlans,
+    dailyExpenses,
+    income,
+    savings,
+    scheduledPayments,
+    onChange,
+  } = props;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -91,12 +103,25 @@ export default function ChatTab(props: Props) {
         content: m.content,
       }));
 
+      const debtPlansConSaldo = debtPlans.map((p) => ({
+        ...p,
+        current_balance: currentBalance(p, scheduledPayments, dailyExpenses),
+      }));
+
       const res = await fetch("/api/ai-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: recentHistory,
-          context: { accounts, debts, dailyExpenses, income, savings, scheduledPayments },
+          context: {
+            accounts,
+            debts,
+            creditos: debtPlansConSaldo,
+            dailyExpenses,
+            income,
+            savings,
+            scheduledPayments,
+          },
         }),
       });
       const data = await res.json();

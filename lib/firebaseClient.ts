@@ -80,7 +80,7 @@ export type ScheduledPayment = {
   account_id: string | null;
   status: "pendiente" | "pagado";
   notes: string | null;
-  source: "manual" | "excel" | "ia" | "fija";
+  source: "manual" | "excel" | "ia" | "fija" | "credito";
 };
 
 export type DebtPlan = {
@@ -89,6 +89,8 @@ export type DebtPlan = {
   original_balance: number;
   monthly_payment: number;
   interest_rate: number | null;
+  due_day: number | null;
+  max_pay_day: number | null;
   order: number;
   account_id: string | null;
   created_at: string;

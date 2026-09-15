@@ -12,6 +12,7 @@ const NAME_KEYS = ["nombre", "deuda", "concepto", "descripcion", "name", "credit
 const BALANCE_KEYS = ["balance", "saldo", "monto_original", "original_balance"];
 const PAYMENT_KEYS = ["valor", "monto", "amount", "cuota", "payment", "pago"];
 const RATE_KEYS = ["rate", "tasa", "interes", "interest"];
+const DUE_DAY_KEYS = ["dia", "día", "dia_vencimiento", "due_day", "vencimiento"];
 
 const NOMBRES_COMUNES = [
   "Tarjeta de crédito",
@@ -51,6 +52,8 @@ export default function CreditosTab({
   const [originalBalance, setOriginalBalance] = useState("");
   const [monthlyPayment, setMonthlyPayment] = useState("");
   const [rate, setRate] = useState("");
+  const [dueDay, setDueDay] = useState("1");
+  const [maxPayDay, setMaxPayDay] = useState("");
   const [linkedAccountId, setLinkedAccountId] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -63,6 +66,8 @@ export default function CreditosTab({
   const [editBalance, setEditBalance] = useState("");
   const [editPayment, setEditPayment] = useState("");
   const [editRate, setEditRate] = useState("");
+  const [editDueDay, setEditDueDay] = useState("1");
+  const [editMaxPayDay, setEditMaxPayDay] = useState("");
   const [editLinkedAccountId, setEditLinkedAccountId] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
@@ -76,6 +81,8 @@ export default function CreditosTab({
       original_balance: Number(originalBalance),
       monthly_payment: Number(monthlyPayment),
       interest_rate: rate ? Number(rate) : null,
+      due_day: Number(dueDay),
+      max_pay_day: maxPayDay ? Number(maxPayDay) : null,
       account_id: linkedAccountId || null,
       order: items.length + 1,
       created_at: new Date().toISOString(),
@@ -84,6 +91,8 @@ export default function CreditosTab({
     setOriginalBalance("");
     setMonthlyPayment("");
     setRate("");
+    setDueDay("1");
+    setMaxPayDay("");
     setLinkedAccountId("");
     setSaving(false);
     onChange();
@@ -101,6 +110,8 @@ export default function CreditosTab({
     setEditBalance(String(item.original_balance));
     setEditPayment(String(item.monthly_payment));
     setEditRate(item.interest_rate ? String(item.interest_rate) : "");
+    setEditDueDay(item.due_day ? String(item.due_day) : "1");
+    setEditMaxPayDay(item.max_pay_day ? String(item.max_pay_day) : "");
     setEditLinkedAccountId(item.account_id || "");
   }
 
@@ -117,6 +128,8 @@ export default function CreditosTab({
       original_balance: Number(editBalance),
       monthly_payment: Number(editPayment),
       interest_rate: editRate ? Number(editRate) : null,
+      due_day: Number(editDueDay),
+      max_pay_day: editMaxPayDay ? Number(editMaxPayDay) : null,
       account_id: editLinkedAccountId || null,
     });
     setEditSaving(false);
@@ -135,6 +148,7 @@ export default function CreditosTab({
       const rows: any[] = extractRows(wb, NAME_KEYS, BALANCE_KEYS);
 
       const uid = auth.currentUser!.uid;
+      let sinDia = 0;
 
       const toInsert = rows
         .map((row, i) => {
@@ -155,11 +169,17 @@ export default function CreditosTab({
             ? Number(String(rawPayment).replace(/[^0-9.-]/g, ""))
             : 0;
 
+          const rawDueDay = pick(keys, DUE_DAY_KEYS);
+          const due_day = rawDueDay ? Number(String(rawDueDay).replace(/[^0-9]/g, "")) : 1;
+          if (!rawDueDay) sinDia++;
+
           return {
             name: String(rawName),
             original_balance,
             monthly_payment,
             interest_rate: parseRate(pick(keys, RATE_KEYS)),
+            due_day: due_day >= 1 && due_day <= 31 ? due_day : 1,
+            max_pay_day: null,
             account_id: null,
             order: items.length + i + 1,
             created_at: new Date().toISOString(),
@@ -174,7 +194,12 @@ export default function CreditosTab({
       } else {
         const col = collection(db, "users", uid, "debtPlans");
         await Promise.all(toInsert.map((row) => addDoc(col, row)));
-        setImportMsg(`Se importaron ${toInsert.length} créditos.`);
+        setImportMsg(
+          `Se importaron ${toInsert.length} créditos.` +
+            (sinDia
+              ? ` ${sinDia} quedaron con día de vencimiento 1 por defecto — ajústalo en cada uno.`
+              : "")
+        );
         onChange();
       }
     } catch (err) {
@@ -196,6 +221,18 @@ export default function CreditosTab({
     totalOriginal > 0
       ? Math.max(0, Math.min(100, ((totalOriginal - totalActual) / totalOriginal) * 100))
       : 0;
+
+  const pendientes = items.filter(
+    (p) => currentBalance(p, scheduledPayments, dailyExpenses) > 0
+  );
+  const avalancha = [...pendientes].sort(
+    (a, b) => (b.interest_rate ?? -1) - (a.interest_rate ?? -1)
+  );
+  const bolaDeNieve = [...pendientes].sort(
+    (a, b) =>
+      currentBalance(a, scheduledPayments, dailyExpenses) -
+      currentBalance(b, scheduledPayments, dailyExpenses)
+  );
 
   return (
     <div className="py-4 space-y-6">
@@ -219,6 +256,48 @@ export default function CreditosTab({
               className="h-full bg-sage"
               style={{ width: `${Math.min(100, progresoGlobal)}%` }}
             />
+          </div>
+        </div>
+      )}
+
+      {pendientes.length > 1 && (
+        <div className="ledger-card rounded-sm p-4">
+          <p className="text-sm text-stone mb-3">
+            Orden sugerido para enfocar tus pagos extra
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-stone mb-2">
+                Avalancha — mayor tasa primero (menos intereses en total)
+              </p>
+              <ol className="text-sm space-y-1 list-decimal list-inside">
+                {avalancha.map((p) => (
+                  <li key={p.id}>
+                    {p.name}
+                    <span className="text-xs text-stone">
+                      {" "}
+                      · {p.interest_rate ? `${p.interest_rate}%` : "sin tasa"}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div>
+              <p className="text-xs text-stone mb-2">
+                Bola de nieve — menor saldo primero (motivación rápida)
+              </p>
+              <ol className="text-sm space-y-1 list-decimal list-inside">
+                {bolaDeNieve.map((p) => (
+                  <li key={p.id}>
+                    {p.name}
+                    <span className="text-xs text-stone">
+                      {" "}
+                      · {formatCOP(currentBalance(p, scheduledPayments, dailyExpenses))}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
         </div>
       )}
@@ -282,6 +361,32 @@ export default function CreditosTab({
           onChange={(e) => setRate(e.target.value)}
           className="col-span-2 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
         />
+        <div>
+          <label className="block text-xs text-stone mb-1">Día de vencimiento</label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            value={dueDay}
+            onChange={(e) => setDueDay(e.target.value)}
+            className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-stone mb-1">
+            Día máximo de pago (opcional)
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            placeholder="Antes de recargo"
+            value={maxPayDay}
+            onChange={(e) => setMaxPayDay(e.target.value)}
+            className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+          />
+        </div>
         <div className="col-span-2">
           <label className="block text-xs text-stone mb-1">
             ¿Es la tarjeta/cupo de alguna cuenta? (opcional)
@@ -352,6 +457,31 @@ export default function CreditosTab({
                   onChange={(e) => setEditRate(e.target.value)}
                   className="col-span-2 border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
                 />
+                <div>
+                  <label className="block text-xs text-stone mb-1">Día de vencimiento</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={editDueDay}
+                    onChange={(e) => setEditDueDay(e.target.value)}
+                    className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-stone mb-1">
+                    Día máximo de pago (opcional)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    placeholder="Antes de recargo"
+                    value={editMaxPayDay}
+                    onChange={(e) => setEditMaxPayDay(e.target.value)}
+                    className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                  />
+                </div>
                 <div className="col-span-2">
                   <label className="block text-xs text-stone mb-1">
                     ¿Es la tarjeta/cupo de alguna cuenta? (opcional)
@@ -393,6 +523,20 @@ export default function CreditosTab({
           const pagado = totalPagadoDebtPlan(scheduledPayments, item.name);
           const gastado = totalGastadoDebtPlan(dailyExpenses, item);
           const saldoActual = currentBalance(item, scheduledPayments, dailyExpenses);
+
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const monthKey = todayStr.slice(0, 7);
+          const cuotaDelMes = scheduledPayments.find(
+            (sp) => sp.debt_name === item.name && sp.due_date.startsWith(monthKey)
+          );
+          const vencida =
+            !!cuotaDelMes && cuotaDelMes.status === "pendiente" && cuotaDelMes.due_date < todayStr;
+          const urgente =
+            !!cuotaDelMes &&
+            cuotaDelMes.status === "pendiente" &&
+            !vencida &&
+            (Date.parse(cuotaDelMes.due_date) - Date.parse(todayStr)) / 86400000 <= 3;
+
           const progreso =
             item.original_balance > 0
               ? ((item.original_balance - saldoActual) / item.original_balance) * 100
@@ -465,7 +609,14 @@ export default function CreditosTab({
                   ? ` · ~${mesesRestantes} meses restantes al ritmo actual`
                   : ""}
                 {item.interest_rate ? ` · ${item.interest_rate}% interés` : ""}
+                {item.due_day ? ` · vence día ${item.due_day}` : ""}
               </p>
+              {vencida && (
+                <p className="text-xs text-coral">La cuota de este mes ya venció</p>
+              )}
+              {urgente && (
+                <p className="text-xs text-gold">La cuota de este mes vence pronto</p>
+              )}
               <p className={`text-xs ${mensajeColor}`}>{mensaje}</p>
             </li>
           );
