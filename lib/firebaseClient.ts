@@ -42,6 +42,8 @@ export type Debt = {
   account_id: string | null;
   category: string;
   active: boolean;
+  original_balance: number | null;
+  interest_rate: number | null;
 };
 
 export type DailyExpense = {

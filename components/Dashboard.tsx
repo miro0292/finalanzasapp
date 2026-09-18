@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut, type User } from "firebase/auth";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import {
@@ -27,16 +27,19 @@ import PaymentReminders from "./PaymentReminders";
 import ThemeToggle from "./ThemeToggle";
 import { useInactivityLogout } from "@/lib/useInactivityLogout";
 import { ensureMonthlyScheduledPayments } from "@/lib/autoSchedule";
+import { ensureCreditosMigradosADeudas } from "@/lib/migrateCreditos";
 
+// "hidden" = pestañas guardadas para más adelante, a pedido del usuario:
+// su código y datos siguen intactos, solo no aparecen en la navegación.
 const TABS = [
   { id: "resumen", label: "Resumen" },
   { id: "cuentas", label: "Cuentas" },
   { id: "deudas", label: "Deudas fijas" },
-  { id: "creditos", label: "Créditos" },
+  { id: "creditos", label: "Créditos", hidden: true },
   { id: "hormiga", label: "Gastos hormiga" },
   { id: "ingresos", label: "Ingresos" },
-  { id: "ahorros", label: "Ahorros" },
-  { id: "programados", label: "Programados" },
+  { id: "ahorros", label: "Ahorros", hidden: true },
+  { id: "programados", label: "Programados", hidden: true },
   { id: "chat", label: "Chat IA" },
 ] as const;
 
@@ -71,9 +74,15 @@ export default function Dashboard({ user }: { user: User }) {
       getDocs(query(col("scheduledPayments"), orderBy("due_date", "asc"), limit(300))),
       getDocs(query(col("debtPlans"), orderBy("order", "asc"))),
     ]);
-    const debtsData = mapDocs<Debt>(deb);
+    let debtsData = mapDocs<Debt>(deb);
     const debtPlansData = mapDocs<DebtPlan>(dp);
     let scheduledData = mapDocs<ScheduledPayment>(sp);
+
+    const migro = await ensureCreditosMigradosADeudas(uid, debtsData, debtPlansData);
+    if (migro) {
+      const debFresh = await getDocs(query(col("debts"), orderBy("due_day", "asc")));
+      debtsData = mapDocs<Debt>(debFresh);
+    }
 
     const creo = await ensureMonthlyScheduledPayments(
       uid,
@@ -98,7 +107,13 @@ export default function Dashboard({ user }: { user: User }) {
     setLoading(false);
   }, [user.uid]);
 
+  const didInit = useRef(false);
   useEffect(() => {
+    // Evita que el doble-montaje de React Strict Mode (solo en desarrollo)
+    // dispare loadAll() dos veces en paralelo — sin esto, la migración de
+    // Créditos y la generación automática de pagos podían duplicarse.
+    if (didInit.current) return;
+    didInit.current = true;
     loadAll();
   }, [loadAll]);
 
@@ -146,7 +161,12 @@ export default function Dashboard({ user }: { user: User }) {
               />
             )}
             {tab === "deudas" && (
-              <DeudasTab items={debts} accounts={accounts} onChange={loadAll} />
+              <DeudasTab
+                items={debts}
+                accounts={accounts}
+                scheduledPayments={scheduledPayments}
+                onChange={loadAll}
+              />
             )}
             {tab === "creditos" && (
               <CreditosTab
@@ -195,7 +215,7 @@ export default function Dashboard({ user }: { user: User }) {
 
       <nav className="fixed bottom-0 left-0 right-0 bg-paper border-t border-line">
         <div className="max-w-3xl mx-auto flex overflow-x-auto">
-          {TABS.map((t) => (
+          {TABS.filter((t) => !("hidden" in t && t.hidden)).map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}

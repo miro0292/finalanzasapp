@@ -3,10 +3,11 @@
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { auth, db, Account, Debt } from "@/lib/firebaseClient";
+import { auth, db, Account, Debt, ScheduledPayment } from "@/lib/firebaseClient";
 import { formatCOP } from "@/lib/format";
 import AccountSelect, { accountLabel } from "@/components/AccountSelect";
 import { extractRows, pick } from "@/lib/excelImport";
+import { totalPagadoDebtPlan } from "@/lib/debtProgress";
 
 // El Excel puede traer columnas con estos nombres (sin importar mayúsculas):
 // nombre/deuda/concepto/creditor/acreedor, valor/monto/cuota/payment/pago
@@ -35,10 +36,12 @@ const NOMBRES_COMUNES = [
 export default function DeudasTab({
   items,
   accounts,
+  scheduledPayments,
   onChange,
 }: {
   items: Debt[];
   accounts: Account[];
+  scheduledPayments: ScheduledPayment[];
   onChange: () => void;
 }) {
   const [name, setName] = useState("");
@@ -47,6 +50,8 @@ export default function DeudasTab({
   const [maxPayDay, setMaxPayDay] = useState("");
   const [category, setCategory] = useState("servicios");
   const [accountId, setAccountId] = useState("");
+  const [originalBalance, setOriginalBalance] = useState("");
+  const [rate, setRate] = useState("");
   const [saving, setSaving] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,6 +65,8 @@ export default function DeudasTab({
   const [editMaxPayDay, setEditMaxPayDay] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editAccountId, setEditAccountId] = useState("");
+  const [editOriginalBalance, setEditOriginalBalance] = useState("");
+  const [editRate, setEditRate] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -101,6 +108,8 @@ export default function DeudasTab({
             account_id: null,
             category: "servicios",
             active: true,
+            original_balance: null,
+            interest_rate: null,
             created_at: new Date().toISOString(),
           };
         })
@@ -142,12 +151,16 @@ export default function DeudasTab({
       account_id: accountId || null,
       category,
       active: true,
+      original_balance: originalBalance ? Number(originalBalance) : null,
+      interest_rate: rate ? Number(rate) : null,
       created_at: new Date().toISOString(),
     });
     setName("");
     setAmount("");
     setDueDay("1");
     setMaxPayDay("");
+    setOriginalBalance("");
+    setRate("");
     setSaving(false);
     onChange();
   }
@@ -164,6 +177,31 @@ export default function DeudasTab({
     onChange();
   }
 
+  async function markPaid(item: Debt) {
+    const uid = auth.currentUser!.uid;
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const cuotaDelMes = scheduledPayments.find(
+      (sp) => sp.debt_name === item.name && sp.due_date.startsWith(monthKey)
+    );
+    if (cuotaDelMes) {
+      await updateDoc(doc(db, "users", uid, "scheduledPayments", cuotaDelMes.id), {
+        status: cuotaDelMes.status === "pagado" ? "pendiente" : "pagado",
+      });
+    } else {
+      await addDoc(collection(db, "users", uid, "scheduledPayments"), {
+        debt_name: item.name,
+        amount: item.amount,
+        due_date: `${monthKey}-${String(item.due_day).padStart(2, "0")}`,
+        account_id: item.account_id,
+        status: "pagado",
+        notes: null,
+        source: "fija",
+        created_at: new Date().toISOString(),
+      });
+    }
+    onChange();
+  }
+
   function startEdit(item: Debt) {
     setEditingId(item.id);
     setEditName(item.name);
@@ -172,6 +210,8 @@ export default function DeudasTab({
     setEditMaxPayDay(item.max_pay_day ? String(item.max_pay_day) : "");
     setEditCategory(item.category);
     setEditAccountId(item.account_id || "");
+    setEditOriginalBalance(item.original_balance ? String(item.original_balance) : "");
+    setEditRate(item.interest_rate ? String(item.interest_rate) : "");
   }
 
   function cancelEdit() {
@@ -189,6 +229,8 @@ export default function DeudasTab({
       max_pay_day: editMaxPayDay ? Number(editMaxPayDay) : null,
       account_id: editAccountId || null,
       category: editCategory,
+      original_balance: editOriginalBalance ? Number(editOriginalBalance) : null,
+      interest_rate: editRate ? Number(editRate) : null,
     });
     setEditSaving(false);
     setEditingId(null);
@@ -282,6 +324,22 @@ export default function DeudasTab({
             className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
           />
         </div>
+        <input
+          type="number"
+          step="0.01"
+          placeholder="Deuda total (opcional, solo créditos/tarjetas)"
+          value={originalBalance}
+          onChange={(e) => setOriginalBalance(e.target.value)}
+          className="border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+        />
+        <input
+          type="number"
+          step="0.01"
+          placeholder="Tasa de interés % (opcional)"
+          value={rate}
+          onChange={(e) => setRate(e.target.value)}
+          className="border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+        />
         <div className="col-span-2">
           <label className="block text-xs text-stone mb-1">
             ¿Con qué la pagas normalmente?
@@ -365,6 +423,22 @@ export default function DeudasTab({
                     className="w-full border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
                   />
                 </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Deuda total (opcional, solo créditos/tarjetas)"
+                  value={editOriginalBalance}
+                  onChange={(e) => setEditOriginalBalance(e.target.value)}
+                  className="border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Tasa de interés % (opcional)"
+                  value={editRate}
+                  onChange={(e) => setEditRate(e.target.value)}
+                  className="border border-line bg-transparent px-3 py-2 rounded-sm text-sm"
+                />
                 <div className="col-span-2">
                   <label className="block text-xs text-stone mb-1">
                     ¿Con qué la pagas normalmente?
@@ -397,49 +471,90 @@ export default function DeudasTab({
             );
           }
 
+          const monthKey = new Date().toISOString().slice(0, 7);
+          const cuotaDelMes = scheduledPayments.find(
+            (sp) => sp.debt_name === item.name && sp.due_date.startsWith(monthKey)
+          );
+          const pagadaEsteMes = cuotaDelMes?.status === "pagado";
+
+          const tieneSaldo = item.original_balance !== null && item.original_balance !== undefined;
+          const pagadoAcumulado = tieneSaldo
+            ? Math.min(totalPagadoDebtPlan(scheduledPayments, item.name), item.original_balance!)
+            : 0;
+          const saldoActual = tieneSaldo ? item.original_balance! - pagadoAcumulado : null;
+          const progreso =
+            tieneSaldo && item.original_balance! > 0
+              ? (pagadoAcumulado / item.original_balance!) * 100
+              : 0;
+
           return (
-            <li
-              key={item.id}
-              className="flex items-center justify-between ledger-card rounded-sm px-4 py-3"
-            >
-              <div>
-                <p className={`text-sm ${!item.active ? "line-through text-stone" : ""}`}>
-                  {item.name}
-                </p>
-                <p className="text-xs text-stone">
-                  Vence día {item.due_day}
-                  {item.max_pay_day ? ` · máximo día ${item.max_pay_day}` : ""}
-                  {" · "}
-                  {accountLabel(accounts, item.account_id)}
-                </p>
-                {vencida && (
-                  <p className="text-xs text-coral mt-0.5">Ya venció este mes</p>
-                )}
-                {urgente && !vencida && (
-                  <p className="text-xs text-gold mt-0.5">Vence pronto</p>
-                )}
+            <li key={item.id} className="ledger-card rounded-sm px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p
+                    className={`text-sm ${!item.active ? "line-through text-stone" : ""} ${
+                      pagadaEsteMes ? "text-sage" : ""
+                    }`}
+                  >
+                    {item.name}
+                    {pagadaEsteMes ? " ✓" : ""}
+                  </p>
+                  <p className="text-xs text-stone">
+                    Vence día {item.due_day}
+                    {item.max_pay_day ? ` · máximo día ${item.max_pay_day}` : ""}
+                    {" · "}
+                    {accountLabel(accounts, item.account_id)}
+                    {item.interest_rate ? ` · ${item.interest_rate}% interés` : ""}
+                  </p>
+                  {vencida && !pagadaEsteMes && (
+                    <p className="text-xs text-coral mt-0.5">Ya venció este mes</p>
+                  )}
+                  {urgente && !vencida && !pagadaEsteMes && (
+                    <p className="text-xs text-gold mt-0.5">Vence pronto</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="amount text-sm">{formatCOP(item.amount)}</span>
+                  <button
+                    onClick={() => markPaid(item)}
+                    className="text-xs text-stone hover:text-sage"
+                  >
+                    {pagadaEsteMes ? "Deshacer" : "Marcar pagado"}
+                  </button>
+                  <button
+                    onClick={() => startEdit(item)}
+                    className="text-xs text-stone hover:text-ink"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => toggleActive(item)}
+                    className="text-xs text-stone hover:text-sage"
+                  >
+                    {item.active ? "Pausar" : "Activar"}
+                  </button>
+                  <button
+                    onClick={() => remove(item.id)}
+                    className="text-xs text-stone hover:text-coral"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="amount text-sm">{formatCOP(item.amount)}</span>
-                <button
-                  onClick={() => startEdit(item)}
-                  className="text-xs text-stone hover:text-ink"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => toggleActive(item)}
-                  className="text-xs text-stone hover:text-sage"
-                >
-                  {item.active ? "Pausar" : "Activar"}
-                </button>
-                <button
-                  onClick={() => remove(item.id)}
-                  className="text-xs text-stone hover:text-coral"
-                >
-                  Eliminar
-                </button>
-              </div>
+              {tieneSaldo && (
+                <>
+                  <div className="w-full h-2 bg-line rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-sage"
+                      style={{ width: `${Math.min(100, progreso)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-stone">
+                    Deuda total {formatCOP(item.original_balance!)} · saldo actual{" "}
+                    {formatCOP(saldoActual!)} · {progreso.toFixed(0)}% pagado
+                  </p>
+                </>
+              )}
             </li>
           );
         })}
